@@ -50,6 +50,17 @@ static size_t num_digit(long long num) {
   return result;
 }
 
+static bool is_zero_str(const char *str) {
+
+  for (size_t i = 0; str[i] != '\0'; ++i) {
+    if (str[i] != '0') {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static BigInt *add_leading_zeroes(BigInt *n, int num_of_zeroes) {
 
   if (num_of_zeroes == 0) {
@@ -67,6 +78,7 @@ static BigInt *add_leading_zeroes(BigInt *n, int num_of_zeroes) {
 
   free(n->ptr);
   n->ptr = new_str;
+  n->size = n->size + num_of_zeroes;
 
   return n;
 }
@@ -74,6 +86,16 @@ static BigInt *add_leading_zeroes(BigInt *n, int num_of_zeroes) {
 static BigInt *remove_leading_zeroes(BigInt *n) {
 
   if (n->size == 0) {
+    return n;
+  }
+
+  if (is_zero_str(n->ptr)) {
+    free(n->ptr);
+    char *zero_str = alloc_char_arr(1);
+    zero_str[0] = '0';
+
+    n->ptr = zero_str;
+    n->size = 1;
     return n;
   }
 
@@ -103,16 +125,27 @@ static BigInt *remove_leading_zeroes(BigInt *n) {
   return n;
 }
 
-static BigInt *sum_with_equal_sign(BigInt *n1, BigInt *n2, BigInt *res) {
+static BigInt *sum_with_equal_sign(const BigInt *n1, const BigInt *n2,
+                                   BigInt *res) {
 
   int diff = n1->size - n2->size;
 
   int abs_diff = abs_int(diff);
 
-  (diff >= 0) ? add_leading_zeroes(n2, abs_diff)
-              : add_leading_zeroes(n1, abs_diff);
+  BigInt *less_copy = NULL;
+  const BigInt *greater = NULL;
 
-  char *sum_str = alloc_char_arr(n1->size + 1);
+  if (diff >= 0) {
+    less_copy = bigint_create_copy(n2);
+    greater = n1;
+  } else {
+    less_copy = bigint_create_copy(n1);
+    greater = n2;
+  }
+
+  add_leading_zeroes(less_copy, abs_diff);
+
+  char *sum_str = alloc_char_arr(less_copy->size + 1);
 
   if (sum_str == NULL) {
     return NULL;
@@ -120,12 +153,12 @@ static BigInt *sum_with_equal_sign(BigInt *n1, BigInt *n2, BigInt *res) {
 
   int add_part = 0;
 
-  int k = n1->size;
+  int k = less_copy->size;
 
-  for (int i = n1->size - 1; i >= 0; i--) {
+  for (int i = less_copy->size - 1; i >= 0; i--) {
 
-    int d1 = n1->ptr[i] - '0';
-    int d2 = n2->ptr[i] - '0';
+    int d1 = greater->ptr[i] - '0';
+    int d2 = less_copy->ptr[i] - '0';
 
     int s = (d1 + d2 + add_part);
 
@@ -142,26 +175,36 @@ static BigInt *sum_with_equal_sign(BigInt *n1, BigInt *n2, BigInt *res) {
   sum_str[k] = (add_part == 0) ? '0' : '1';
 
   res->ptr = sum_str;
-  res->size = n1->size + 1; // NOTE: size with leading zero
-  res->sign = (n1->sign == '-') ? '-' : '+';
+  res->size = less_copy->size + 1;
+  res->sign = (less_copy->sign == '-') ? '-' : '+';
+
+  bigint_free(less_copy);
 
   return res;
 }
 
-// TODO: calculate correct sign
-static BigInt *substr_with_diff_signs(BigInt *n1, BigInt *n2, BigInt *res) {
+static BigInt *substr_with_diff_signs(const BigInt *n1, const BigInt *n2,
+                                      BigInt *res) {
 
-  BigInt *greater_abs = (n1->size >= n2->size) ? n1 : n2;
-  BigInt *lower_abs = (n1->size < n2->size) ? n1 : n2;
+  const BigInt *greater_abs = NULL;
+  const BigInt *lower_abs = NULL;
 
-  int diff = n1->size - n2->size;
+  if (bigint_less(n1, n2)) {
+    lower_abs = n1;
+    greater_abs = n2;
+  } else {
+    lower_abs = n2;
+    greater_abs = n1;
+  }
 
+  BigInt *less_copy = bigint_create_copy(lower_abs);
+
+  int diff = greater_abs->size - lower_abs->size;
   int abs_diff = abs_int(diff);
 
-  (diff >= 0) ? add_leading_zeroes(n2, abs_diff)
-              : add_leading_zeroes(n1, abs_diff);
+  add_leading_zeroes(less_copy, abs_diff);
 
-  char *sum_str = alloc_char_arr(n1->size);
+  char *sum_str = alloc_char_arr(greater_abs->size);
 
   if (sum_str == NULL) {
     return NULL;
@@ -169,10 +212,10 @@ static BigInt *substr_with_diff_signs(BigInt *n1, BigInt *n2, BigInt *res) {
 
   int substr_part = 0;
 
-  for (int i = n1->size - 1; i >= 0; i--) {
+  for (int i = greater_abs->size - 1; i >= 0; i--) {
 
     int d_greater = greater_abs->ptr[i] - '0';
-    int d_lower = lower_abs->ptr[i] - '0';
+    int d_lower = less_copy->ptr[i] - '0';
 
     int s = (d_greater - d_lower) - substr_part;
 
@@ -187,8 +230,10 @@ static BigInt *substr_with_diff_signs(BigInt *n1, BigInt *n2, BigInt *res) {
   }
 
   res->ptr = sum_str;
-  res->size = n1->size;
-  res->sign = (n1->sign == '-') ? '-' : '+';
+  res->size = greater_abs->size;
+  res->sign = (bigint_less(n1, n2)) ? '-' : '+';
+
+  bigint_free(less_copy);
 
   return res;
 }
@@ -208,7 +253,7 @@ BigInt *bigint_create() {
   return num;
 }
 
-BigInt *bigint_create_copy(BigInt *num) {
+BigInt *bigint_create_copy(const BigInt *num) {
 
   if (num == NULL) {
     return NULL;
@@ -266,29 +311,32 @@ BigInt *bigint_create_from_string(const char *str) {
     return NULL;
   }
 
-  size_t s_len = strlen(str);
-  char *arr = alloc_char_arr(s_len);
-
   if (str[0] == '-' || str[0] == '+') {
     if (is_valid_string(str + 1)) {
+
+      size_t s_len = strlen(str);
+      char *arr = alloc_char_arr(s_len - 1);
+
       memcpy(arr, str + 1, s_len - 1);
 
       s_num->size = s_len - 1;
       s_num->sign = str[0];
       s_num->ptr = arr;
     } else {
-      free(arr);
       return NULL;
     }
   } else {
     if (is_valid_string(str)) {
+
+      size_t s_len = strlen(str);
+      char *arr = alloc_char_arr(s_len);
+
       memcpy(arr, str, s_len);
 
       s_num->size = s_len;
       s_num->sign = '+';
       s_num->ptr = arr;
     } else {
-      free(arr);
       return NULL;
     }
   }
@@ -296,7 +344,7 @@ BigInt *bigint_create_from_string(const char *str) {
   return s_num;
 }
 
-bool bigint_less(BigInt *n1, BigInt *n2) {
+bool bigint_less(const BigInt *n1, const BigInt *n2) {
 
   if (n1->sign == '+' && n2->sign == '-') {
     return false;
@@ -313,7 +361,24 @@ bool bigint_less(BigInt *n1, BigInt *n2) {
   return (cmp <= 0) ? false : true;
 }
 
-BigInt *bigint_sum(BigInt *n1, BigInt *n2) {
+bool bigint_is_equal(const BigInt *n1, const BigInt *n2) {
+
+  if (n1 == NULL || n2 == NULL) {
+    return true;
+  }
+
+  bool is_equal_size = n1->size == n2->size;
+  bool is_equal_str = !strcmp(n1->ptr, n2->ptr);
+  bool is_equal_sign = n1->sign == n2->sign;
+
+  if (is_equal_sign && is_equal_size && is_equal_str) {
+    return true;
+  }
+
+  return false;
+}
+
+BigInt *bigint_sum(const BigInt *n1, const BigInt *n2) {
 
   if (n1 == NULL || n2 == NULL) {
     return NULL;
@@ -329,15 +394,28 @@ BigInt *bigint_sum(BigInt *n1, BigInt *n2) {
     // TODO: down func can return NULL
     // add check
     sum_with_equal_sign(n1, n2, res);
-    remove_leading_zeroes(res);
   } else {
     substr_with_diff_signs(n1, n2, res);
   }
 
+  remove_leading_zeroes(res);
+
   return res;
 }
 
-BigInt *bigint_difference(BigInt *n1, BigInt *n2) {
+void bigint_sum_in_param(BigInt **n1, const BigInt *n2) {
+
+  if (n1 == NULL || n2 == NULL) {
+    return;
+  }
+
+  BigInt *res = bigint_sum(*n1, n2);
+
+  bigint_free(*n1);
+  *n1 = res;
+}
+
+BigInt *bigint_difference(const BigInt *n1, const BigInt *n2) {
 
   if (n1 == NULL || n2 == NULL) {
     return NULL;
@@ -349,11 +427,45 @@ BigInt *bigint_difference(BigInt *n1, BigInt *n2) {
     return NULL;
   }
 
-  if (n1->sign != n2->sign) {
-    substr_with_diff_signs(n1, n2, res);
+  if (n1->sign == '-' && n2->sign == '-') {
+    bigint_sum(n1, n2);
   } else {
-    sum_with_equal_sign(n1, n2, res);
+    substr_with_diff_signs(n1, n2, res);
     remove_leading_zeroes(res);
+  }
+
+  return res;
+}
+
+BigInt *bigint_multiply(const BigInt *n1, unsigned int n2) {
+
+  if (n1 == NULL) {
+    return NULL;
+  }
+
+  BigInt *res = bigint_create();
+
+  if (res == NULL) {
+    return NULL;
+  }
+
+  // TODO: better compare
+  if (n2 == 0 || is_zero_str(n1->ptr)) {
+    res->size = 1;
+
+    char *zero_str = alloc_char_arr(1);
+    zero_str[0] = '0';
+
+    if (res->ptr != NULL) {
+      free(res->ptr);
+    }
+
+    res->ptr = zero_str;
+    return res;
+  }
+
+  for (unsigned int i = 0; i < n2; ++i) {
+    bigint_sum_in_param(&res, n1);
   }
 
   return res;
