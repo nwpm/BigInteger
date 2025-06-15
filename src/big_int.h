@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 
+// TODO: new parametr - capacity
 typedef struct BigInt {
 
   char sign;
@@ -19,13 +20,19 @@ BigInt *bigint_create_from_string(const char *str);
 BigInt *bigint_create_copy(const BigInt *num);
 
 bool bigint_less(const BigInt *n1, const BigInt *n2);
+bool bigint_greater(const BigInt *n1, const BigInt *n2);
+bool bigint_less_or_equal(const BigInt *n1, const BigInt *n2);
+bool bigint_greater_or_equal(const BigInt *n1, const BigInt *n2);
 bool bigint_is_equal(const BigInt *n1, const BigInt *n2);
 
-BigInt *bigint_sum(const BigInt *n1, const BigInt *n2);
-BigInt *bigint_difference(const BigInt *n1, const BigInt *n2);
+BigInt *bigint_sum(BigInt *n1, BigInt *n2);
+BigInt *bigint_difference(BigInt *n1, BigInt *n2);
 BigInt *bigint_multiply(const BigInt *n1, unsigned int n2);
+BigInt *bigint_abs(const BigInt *n);
 
-void bigint_sum_in_param(BigInt **n1, const BigInt *n2);
+void bigint_negate(BigInt *n1);
+void bigint_add_assing(BigInt *n1, BigInt *n2);
+void bigint_substr_assing(BigInt *n1, const BigInt *n2);
 void bigint_free(BigInt *big_int);
 
 #endif // BIG_INT_H
