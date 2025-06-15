@@ -125,41 +125,47 @@ static BigInt *remove_leading_zeroes(BigInt *n) {
   return n;
 }
 
-static BigInt *sum_with_equal_sign(const BigInt *n1, const BigInt *n2,
-                                   BigInt *res) {
+static bool abs_less(const BigInt *n1, const BigInt *n2) {
 
-  int diff = n1->size - n2->size;
-
-  int abs_diff = abs_int(diff);
-
-  BigInt *less_copy = NULL;
-  const BigInt *greater = NULL;
-
-  if (diff >= 0) {
-    less_copy = bigint_create_copy(n2);
-    greater = n1;
-  } else {
-    less_copy = bigint_create_copy(n1);
-    greater = n2;
+  if (n1->size > n2->size) {
+    return false;
+  } else if (n2->size > n1->size) {
+    return true;
   }
 
-  add_leading_zeroes(less_copy, abs_diff);
+  int cmp = strcmp(n1->ptr, n2->ptr);
+  return (cmp < 0) ? true : false;
+}
 
-  char *sum_str = alloc_char_arr(less_copy->size + 1);
+static BigInt *sum(BigInt *n1, BigInt *n2, BigInt *res, char res_sign) {
+
+  BigInt *greater_abs = NULL;
+  BigInt *lower_abs = NULL;
+
+  if (abs_less(n1, n2)) {
+    greater_abs = n2;
+    lower_abs = n1;
+  } else {
+    greater_abs = n1;
+    lower_abs = n2;
+  }
+
+  int diff = greater_abs->size - lower_abs->size;
+
+  add_leading_zeroes(lower_abs, diff);
+
+  char *sum_str = alloc_char_arr(n1->size + 1);
 
   if (sum_str == NULL) {
     return NULL;
   }
 
   int add_part = 0;
+  int k = n1->size;
 
-  int k = less_copy->size;
-
-  for (int i = less_copy->size - 1; i >= 0; i--) {
-
-    int d1 = greater->ptr[i] - '0';
-    int d2 = less_copy->ptr[i] - '0';
-
+  for (int i = n1->size - 1; i >= 0; i--) {
+    int d1 = n1->ptr[i] - '0';
+    int d2 = n2->ptr[i] - '0';
     int s = (d1 + d2 + add_part);
 
     if (s > 9) {
@@ -172,51 +178,54 @@ static BigInt *sum_with_equal_sign(const BigInt *n1, const BigInt *n2,
     sum_str[k--] = s + '0';
   }
 
-  sum_str[k] = (add_part == 0) ? '0' : '1';
+  sum_str[k] = (add_part) ? '1' : '0';
 
   res->ptr = sum_str;
-  res->size = less_copy->size + 1;
-  res->sign = (less_copy->sign == '-') ? '-' : '+';
+  res->size = n1->size + 1; // NOTE: actual size
+  res->sign = res_sign;
 
-  bigint_free(less_copy);
+  (diff > 0) ? remove_leading_zeroes(n2) : remove_leading_zeroes(n1);
+  remove_leading_zeroes(res);
 
   return res;
 }
 
-static BigInt *substr_with_diff_signs(const BigInt *n1, const BigInt *n2,
-                                      BigInt *res) {
+BigInt *bigint_abs(const BigInt *n) {
 
-  const BigInt *greater_abs = NULL;
-  const BigInt *lower_abs = NULL;
-
-  if (bigint_less(n1, n2)) {
-    lower_abs = n1;
-    greater_abs = n2;
-  } else {
-    lower_abs = n2;
-    greater_abs = n1;
+  if (n == NULL) {
+    return NULL;
   }
 
-  BigInt *less_copy = bigint_create_copy(lower_abs);
+  BigInt *res = bigint_create_copy(n);
+
+  if (res == NULL) {
+    return NULL;
+  }
+
+  res->sign = '+';
+
+  return res;
+}
+
+static BigInt *difference(BigInt *n1, BigInt *n2, BigInt *res) {
+
+  int n1_less = abs_less(n1, n2);
+
+  BigInt *greater_abs = n1_less ? n2 : n1;
+  BigInt *lower_abs = n1_less ? n1 : n2;
 
   int diff = greater_abs->size - lower_abs->size;
-  int abs_diff = abs_int(diff);
+  add_leading_zeroes(lower_abs, diff);
 
-  add_leading_zeroes(less_copy, abs_diff);
-
-  char *sum_str = alloc_char_arr(greater_abs->size);
-
+  char *sum_str = alloc_char_arr(n1->size);
   if (sum_str == NULL) {
     return NULL;
   }
 
   int substr_part = 0;
-
-  for (int i = greater_abs->size - 1; i >= 0; i--) {
-
+  for (int i = n1->size - 1; i >= 0; i--) {
     int d_greater = greater_abs->ptr[i] - '0';
-    int d_lower = less_copy->ptr[i] - '0';
-
+    int d_lower = lower_abs->ptr[i] - '0';
     int s = (d_greater - d_lower) - substr_part;
 
     if (s < 0) {
@@ -225,15 +234,15 @@ static BigInt *substr_with_diff_signs(const BigInt *n1, const BigInt *n2,
     } else {
       substr_part = 0;
     }
-
     sum_str[i] = s + '0';
   }
 
   res->ptr = sum_str;
-  res->size = greater_abs->size;
-  res->sign = (bigint_less(n1, n2)) ? '-' : '+';
+  res->size = strlen(sum_str);
+  res->sign = n1_less ? (n1->sign == '+' ? '-' : '+') : n1->sign;
 
-  bigint_free(less_copy);
+  remove_leading_zeroes(lower_abs);
+  remove_leading_zeroes(res);
 
   return res;
 }
@@ -299,6 +308,24 @@ BigInt *bigint_create_from_num(long long num) {
   return l_num;
 }
 
+static void create_from_string(BigInt **n, const char *str, char sign) {
+
+  if (!is_valid_string(str)) {
+    free(*n);
+    *n = NULL;
+    return;
+  }
+
+  size_t s_len = strlen(str);
+  char *arr = alloc_char_arr(s_len);
+
+  memcpy(arr, str, s_len);
+
+  (*n)->size = s_len;
+  (*n)->sign = sign;
+  (*n)->ptr = arr;
+}
+
 BigInt *bigint_create_from_string(const char *str) {
 
   if (str == NULL) {
@@ -312,39 +339,20 @@ BigInt *bigint_create_from_string(const char *str) {
   }
 
   if (str[0] == '-' || str[0] == '+') {
-    if (is_valid_string(str + 1)) {
-
-      size_t s_len = strlen(str);
-      char *arr = alloc_char_arr(s_len - 1);
-
-      memcpy(arr, str + 1, s_len - 1);
-
-      s_num->size = s_len - 1;
-      s_num->sign = str[0];
-      s_num->ptr = arr;
-    } else {
-      return NULL;
-    }
+    const char *magnitude = str + 1;
+    create_from_string(&s_num, magnitude, str[0]);
   } else {
-    if (is_valid_string(str)) {
-
-      size_t s_len = strlen(str);
-      char *arr = alloc_char_arr(s_len);
-
-      memcpy(arr, str, s_len);
-
-      s_num->size = s_len;
-      s_num->sign = '+';
-      s_num->ptr = arr;
-    } else {
-      return NULL;
-    }
+    create_from_string(&s_num, str, '+');
   }
 
   return s_num;
 }
 
 bool bigint_less(const BigInt *n1, const BigInt *n2) {
+
+  if (n1 == NULL || n2 == NULL) {
+    return NULL;
+  }
 
   if (n1->sign == '+' && n2->sign == '-') {
     return false;
@@ -359,6 +367,32 @@ bool bigint_less(const BigInt *n1, const BigInt *n2) {
   }
 
   return (cmp <= 0) ? false : true;
+}
+
+bool bigint_less_or_equal(const BigInt *n1, const BigInt *n2) {
+
+  if (!bigint_is_equal(n1, n2)) {
+    if (!bigint_less(n1, n2)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool bigint_greater(const BigInt *n1, const BigInt *n2) {
+  return !bigint_less(n1, n2);
+}
+
+bool bigint_greater_or_equal(const BigInt *n1, const BigInt *n2) {
+
+  if (!bigint_is_equal(n1, n2)) {
+    if (bigint_less(n1, n2)) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 bool bigint_is_equal(const BigInt *n1, const BigInt *n2) {
@@ -378,7 +412,7 @@ bool bigint_is_equal(const BigInt *n1, const BigInt *n2) {
   return false;
 }
 
-BigInt *bigint_sum(const BigInt *n1, const BigInt *n2) {
+BigInt *bigint_sum(BigInt *n1, BigInt *n2) {
 
   if (n1 == NULL || n2 == NULL) {
     return NULL;
@@ -391,31 +425,15 @@ BigInt *bigint_sum(const BigInt *n1, const BigInt *n2) {
   }
 
   if (n1->sign == n2->sign) {
-    // TODO: down func can return NULL
-    // add check
-    sum_with_equal_sign(n1, n2, res);
+    sum(n1, n2, res, n1->sign);
   } else {
-    substr_with_diff_signs(n1, n2, res);
+    difference(n1, n2, res);
   }
-
-  remove_leading_zeroes(res);
 
   return res;
 }
 
-void bigint_sum_in_param(BigInt **n1, const BigInt *n2) {
-
-  if (n1 == NULL || n2 == NULL) {
-    return;
-  }
-
-  BigInt *res = bigint_sum(*n1, n2);
-
-  bigint_free(*n1);
-  *n1 = res;
-}
-
-BigInt *bigint_difference(const BigInt *n1, const BigInt *n2) {
+BigInt *bigint_difference(BigInt *n1, BigInt *n2) {
 
   if (n1 == NULL || n2 == NULL) {
     return NULL;
@@ -427,49 +445,18 @@ BigInt *bigint_difference(const BigInt *n1, const BigInt *n2) {
     return NULL;
   }
 
-  if (n1->sign == '-' && n2->sign == '-') {
-    bigint_sum(n1, n2);
-  } else {
-    substr_with_diff_signs(n1, n2, res);
-    remove_leading_zeroes(res);
+  if (n1->sign == n2->sign) {
+    difference(n1, n2, res);
+  } else if (n1->sign == '+' && n2->sign == '-') {
+    sum(n1, n2, res, '+');
+  } else if (n1->sign == '-' && n2->sign == '+') {
+    sum(n1, n2, res, '-');
   }
 
   return res;
 }
 
-BigInt *bigint_multiply(const BigInt *n1, unsigned int n2) {
-
-  if (n1 == NULL) {
-    return NULL;
-  }
-
-  BigInt *res = bigint_create();
-
-  if (res == NULL) {
-    return NULL;
-  }
-
-  // TODO: better compare
-  if (n2 == 0 || is_zero_str(n1->ptr)) {
-    res->size = 1;
-
-    char *zero_str = alloc_char_arr(1);
-    zero_str[0] = '0';
-
-    if (res->ptr != NULL) {
-      free(res->ptr);
-    }
-
-    res->ptr = zero_str;
-    return res;
-  }
-
-  for (unsigned int i = 0; i < n2; ++i) {
-    bigint_sum_in_param(&res, n1);
-  }
-
-  return res;
-}
+void bigint_negate(BigInt *n1) { n1->sign = (n1->sign == '+') ? '-' : '+'; }
 
 void bigint_free(BigInt *big_int) {
 
