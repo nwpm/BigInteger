@@ -1,38 +1,36 @@
 #ifndef BIG_INT_H
 #define BIG_INT_H
 
-#include <stdbool.h>
 #include <stddef.h>
-#include <stdlib.h>
 
-// TODO: new parametr - capacity
+#define BIGINT_START_CAPACITY 8
+
 typedef struct BigInt {
 
   char sign;
-  char *ptr;
+  char *cstr;
   size_t size;
+  size_t capacity;
 
 } BigInt;
 
 BigInt *bigint_create();
-BigInt *bigint_create_from_num(long long num);
-BigInt *bigint_create_from_string(const char *str);
-BigInt *bigint_create_copy(const BigInt *num);
+BigInt *bigint_create_from_num(long long src_num);
+BigInt *bigint_create_from_cstr(const char *src_cstr);
+BigInt *bigint_create_copy(const BigInt *src_num);
 
-bool bigint_less(const BigInt *n1, const BigInt *n2);
-bool bigint_greater(const BigInt *n1, const BigInt *n2);
-bool bigint_less_or_equal(const BigInt *n1, const BigInt *n2);
-bool bigint_greater_or_equal(const BigInt *n1, const BigInt *n2);
-bool bigint_is_equal(const BigInt *n1, const BigInt *n2);
+int bigint_less(const BigInt *lhs, const BigInt *rhs);
+int bigint_greater(const BigInt *lhs, const BigInt *rhs);
+int bigint_less_or_equal(const BigInt *lhs, const BigInt *rhs);
+int bigint_greater_or_equal(const BigInt *lhs, const BigInt *rhs);
+int bigint_is_equal(const BigInt *lhs, const BigInt *rhs);
 
-BigInt *bigint_sum(BigInt *n1, BigInt *n2);
-BigInt *bigint_difference(BigInt *n1, BigInt *n2);
+BigInt *bigint_sum(const BigInt *a, const BigInt *b);
+BigInt *bigint_difference(BigInt *a, BigInt *b);
 BigInt *bigint_multiply(const BigInt *n1, unsigned int n2);
 BigInt *bigint_abs(const BigInt *n);
 
-void bigint_negate(BigInt *n1);
-void bigint_add_assing(BigInt *n1, BigInt *n2);
-void bigint_substr_assing(BigInt *n1, const BigInt *n2);
-void bigint_free(BigInt *big_int);
+void bigint_negate(BigInt *bigint_num);
+void bigint_free(BigInt *bigint_num);
 
 #endif // BIG_INT_H
