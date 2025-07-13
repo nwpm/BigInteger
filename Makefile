@@ -2,37 +2,51 @@
 PROJECT_NAME = bigint
 
 # === Paths ===
-SRC_DIR = src
+SRC_DIR   = src
+BIN_DIR   = bin
+TEST_DIR  = test
 
 # === Compiler ===
 CC     = gcc
-CFLAGS = -Wall -Wextra -Wpedantic -std=c99
+CFLAGS = -Wall -Wextra -Wpedantic -std=gnu99
 
 DEBUG_FLAGS   = -g -O0 -fsanitize=address
 RELEASE_FLAGS = -O2
+
+# === Unity ===
+UNITY_DIR   = $(TEST_DIR)/Unity
+UNITY_BUILD = $(BUILD_DIR)/Unity
 
 # === Build type ===
 BUILD_TYPE ?= debug
 
 ifeq ($(BUILD_TYPE), debug)
 	CFLAGS    += $(DEBUG_FLAGS)
-	BUILD_PATH = bin/debug
+	BUILD_DIR = build/$(PROJECT_NAME)/debug
 else ifeq ($(BUILD_TYPE), release)
 	CLAGSS    += $(RELEASE_CFLAGS)
-	BUILD_PATH = bin/release
+	BUILD_DIR = build/$(PROJECT_NAME)/release
 else
 	$(error Unknown build type: $(BUILD_TYPE))
 endif
 
-OBJ_DIR      = $(BUILD_PATH)/obj
-LIB_TARGET   = $(BUILD_PATH)/lib$(PROJECT_NAME).a
+LIB_TARGET = $(BUILD_DIR)/lib$(PROJECT_NAME).a
+OBJ_LIB    = src/lib$(PROJECT_NAME).o
 
-OBJ_LIB = $(OBJ_DIR)/lib$(PROJECT_NAME).o
+TEST_TARGET = $(BIN_DIR)/test_bigint
+TEST_OBJ    = $(TEST_DIR)/test_bigint.o
 
 # ===Targets===
-.PHONY: all debug release install uninstall clean
+.PHONY: bigint tests unity install uninstall clean
 
-all: $(LIB_TARGET)
+bigint: $(LIB_TARGET)
+
+unity: $(UNITY_BUILD)
+	cd $(UNITY_BUILD) && cmake ../../$(UNITY_DIR)
+	cd $(UNITY_BUILD) && make
+	find build/Unity -mindepth 1 ! -name 'libunity.a' -exec rm -rf {} +
+
+tests: $(TEST_TARGET)
 
 debug:
 	$(MAKE) BUILD_TYPE=debug
@@ -50,24 +64,29 @@ uninstall:
 	rm -f /usr/local/include/big_int.h
 
 clean :
-	rm -rf $(BUILD_PATH)/*
+	rm -rf $(BUILD_DIR)/*
+	rm -rf $(BIN_DIR)/*
 
 # === Build Rules ===
 
-$(LIB_TARGET) : $(OBJ_LIB) | $(BUILD_PATH)
-	ar rcs $@ $<
-	rm -r $(OBJ_DIR)
+$(TEST_TARGET): $(TEST_OBJ)
+	$(CC) $(CFLAGS) -Isrc/ -L$(BUILD_DIR) $< -o $@ -lbigint
 
-$(OBJ_LIB): $(SRC_DIR)/big_int.c | $(OBJ_DIR)
+$(TEST_OBJ) : $(TEST_DIR)/test_bigint.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJ_DIR):
+$(LIB_TARGET) : $(OBJ_LIB) | $(BUILD_DIR)
+	ar rcs $@ $<
+	rm -r $(OBJ_LIB)
+
+$(OBJ_LIB): $(SRC_DIR)/big_int.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR):
 	mkdir -p $@
 
-$(BUILD_PATH):
+$(UNITY_BUILD):
 	mkdir -p $@
-
-
 
 
 
