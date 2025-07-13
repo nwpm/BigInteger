@@ -1,7 +1,3 @@
 TODO.md
 bin/
-test/build.zsh
-test/intbin
-test/libunity.a
-test/unity.h
-test/unity_internals.h
+build/
