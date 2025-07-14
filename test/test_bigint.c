@@ -1,14 +1,13 @@
 #include "../src/big_int.h"
-#include <assert.h>
-#include <stdio.h>
+#include "./Unity/src/unity.h"
+#include "./Unity/src/unity_internals.h"
+
+void setUp() {}
+void tearDown() {}
 
 int main() {
 
-  BigInt *n = bigint_create_from_num(1234567);
+  UNITY_BEGIN();
 
-  printf("%s\n", n->cstr);
-
-  bigint_free(n);
-
-  return 0;
+  return UNITY_END();
 }
