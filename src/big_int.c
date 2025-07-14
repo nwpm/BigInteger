@@ -43,8 +43,6 @@ static inline long long _abs(long long num) { return (num < 0) ? -num : num; }
 
 static size_t _get_number_of_digits(long long num) {
 
-  // num = (num < 0) ? -num : num;
-
   if (num >= 0 && num < 10)
     return 1;
 
@@ -55,17 +53,6 @@ static size_t _get_number_of_digits(long long num) {
 
   return result;
 }
-
-/*static bool _is_zero_str(const char *str) {
-
-  for (size_t i = 0; str[i] != '\0'; ++i) {
-    if (str[i] != '0') {
-      return false;
-    }
-  }
-
-  return true;
-}*/
 
 static int _create_from_cstr(BigInt *n, const char *cstr, char sign) {
 
@@ -93,69 +80,6 @@ static int _create_from_cstr(BigInt *n, const char *cstr, char sign) {
 
   return 1;
 }
-
-static BigInt *_add_leading_zeroes(BigInt *num, size_t num_of_zeroes) {
-
-  if (num_of_zeroes == 0)
-    return num;
-
-  size_t new_size = num->size + num_of_zeroes;
-  char *new_str = _alloc_cstr(new_size);
-
-  if (new_str == NULL)
-    return NULL;
-
-  memset(new_str, '0', num_of_zeroes);
-  memcpy(new_str + num_of_zeroes, num->cstr, num->size);
-
-  free(num->cstr);
-  num->cstr = new_str;
-  num->size = num->size + num_of_zeroes;
-
-  return num;
-}
-
-/*static BigInt *_remove_leading_zeroes(BigInt *n) {
-
-  if (n->size == 0) {
-    return n;
-  }
-
-  if (is_zero_str(n->ptr)) {
-    free(n->ptr);
-    char *zero_str = alloc_char_arr(1);
-    zero_str[0] = '0';
-
-    n->ptr = zero_str;
-    n->size = 1;
-    return n;
-  }
-
-  size_t num_zeroes = 0;
-
-  for (size_t i = 0; i < n->size && n->ptr[i] == '0'; ++i) {
-    num_zeroes++;
-  }
-
-  if (num_zeroes == 0) {
-    return n;
-  }
-
-  size_t cleaned_size = n->size - num_zeroes;
-  char *clean_str = alloc_char_arr(cleaned_size);
-
-  if (clean_str == NULL) {
-    return NULL;
-  }
-
-  memcpy(clean_str, n->ptr + num_zeroes, cleaned_size);
-
-  free(n->ptr);
-  n->ptr = clean_str;
-  n->size -= num_zeroes;
-
-  return n;
-}*/
 
 static int _abs_compare(const BigInt *lhs, const BigInt *rhs) {
 
@@ -371,12 +295,15 @@ BigInt *bigint_create_from_cstr(const char *cstr) {
     create_status = _create_from_cstr(bigint_num, cstr, '+');
   }
 
-  return (create_status == 1) ? bigint_num : free(bigint_num), NULL;
+  if(create_status != 1){
+    free(bigint_num);
+    return NULL;
+  }
+
+  return bigint_num;
 }
 
-/*int bigint_less(const BigInt *lhs, const BigInt *rhs) {
-
-  // NOTE: absent NULL check
+int bigint_less(const BigInt *lhs, const BigInt *rhs) {
 
   if (lhs->sign == '+' && rhs->sign == '-') {
     return 0;
@@ -384,13 +311,14 @@ BigInt *bigint_create_from_cstr(const char *cstr) {
     return 1;
   }
 
-  int cmp = strcmp(lhs->cstr, rhs->cstr);
-
-  if (lhs->sign == '+' && rhs->sign == '+') {
-    return (cmp < 0) ? 1 : 0;
+  for (size_t i = lhs->size; i > 0; i--) {
+    if (lhs->cstr[i - 1] > rhs->cstr[i - 1])
+      return 0;
+    if (lhs->cstr[i - 1] < rhs->cstr[i - 1])
+      return 1;
   }
 
-  return (cmp < 0) ? 0 : 1;
+  return 0;
 }
 
 int bigint_less_or_equal(const BigInt *lhs, const BigInt *rhs) {
@@ -415,22 +343,35 @@ int bigint_greater_or_equal(const BigInt *lhs, const BigInt *rhs) {
   }
 
   return 1;
-}*/
+}
 
-/*int bigint_is_equal(const BigInt *lhs, const BigInt *rhs) {
+static int _cstr_cmp(const BigInt* a, const BigInt *b){
 
-  // NOTE: absent NULL check
-
-  int is_equal_size = n1->size == n2->size;
-  int is_equal_str = !strcmp(n1->ptr, n2->ptr);
-  int is_equal_sign = n1->sign == n2->sign;
-
-  if (is_equal_sign && is_equal_size && is_equal_str) {
+  if(a->size == 0){
     return 1;
   }
 
+  for(size_t i = a->size; i > 0; --i){
+    if(a->cstr[i - 1] != b->cstr[i - 1]){
+      return 0;
+    }
+  }
+
+  return 1;
+}
+
+int bigint_is_equal(const BigInt *lhs, const BigInt *rhs) {
+
+  if(lhs->size == rhs->size){
+    if(lhs->sign == rhs->sign){
+      if(_cstr_cmp(lhs, rhs)){
+        return 1;
+      }
+    }
+  }
+
   return 0;
-}*/
+}
 
 BigInt *bigint_assign(BigInt *target, const BigInt *source) {
 

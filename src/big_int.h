@@ -26,8 +26,8 @@ int bigint_greater_or_equal(const BigInt *lhs, const BigInt *rhs);
 int bigint_is_equal(const BigInt *lhs, const BigInt *rhs);
 
 BigInt *bigint_assign(BigInt *target, const BigInt *source);
-BigInt *bigint_difference(BigInt *a, const BigInt *b);
-BigInt *bigint_multiply(const BigInt *n1, unsigned int n2);
+BigInt *bigint_difference(BigInt *target, const BigInt *source);
+BigInt *bigint_multiply(BigInt *target, unsigned int mult_by);
 
 BigInt *bigint_negate(BigInt *bigint_num);
 BigInt *bigint_abs(BigInt *bigint_num);
