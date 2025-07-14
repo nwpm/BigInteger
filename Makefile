@@ -15,7 +15,7 @@ RELEASE_FLAGS = -O2
 
 # === Unity ===
 UNITY_DIR   = $(TEST_DIR)/Unity
-UNITY_BUILD = $(BUILD_DIR)/Unity
+UNITY_BUILD = build/Unity
 
 # === Build type ===
 BUILD_TYPE ?= debug
@@ -44,6 +44,8 @@ bigint: $(LIB_TARGET)
 unity: $(UNITY_BUILD)
 	cd $(UNITY_BUILD) && cmake ../../$(UNITY_DIR)
 	cd $(UNITY_BUILD) && make
+	cp test/Unity/src/unity.h $(SRC_DIR)
+	cp test/Unity/src/unity_internals.h $(SRC_DIR) 
 	find build/Unity -mindepth 1 ! -name 'libunity.a' -exec rm -rf {} +
 
 tests: $(TEST_TARGET)
@@ -70,7 +72,8 @@ clean :
 # === Build Rules ===
 
 $(TEST_TARGET): $(TEST_OBJ)
-	$(CC) $(CFLAGS) -Isrc/ -L$(BUILD_DIR) $< -o $@ -lbigint
+	$(CC) $(CFLAGS) -Isrc/ -L$(BUILD_DIR) -L$(UNITY_BUILD) $< -o $@ -lbigint -lunity
+	rm $(TEST_OBJ)
 
 $(TEST_OBJ) : $(TEST_DIR)/test_bigint.c
 	$(CC) $(CFLAGS) -c $< -o $@
