@@ -6,13 +6,10 @@
 
 static char *_alloc_cstr(size_t size) {
 
-  char *arr_c = malloc(size + 1);
+  char *arr_c = malloc(size);
 
-  if (arr_c == NULL) {
+  if (!arr_c)
     return NULL;
-  }
-
-  arr_c[size] = '\0';
 
   return arr_c;
 }
@@ -29,6 +26,17 @@ static int _is_valid_cstr(const char *cstr) {
   }
 
   return 1;
+}
+
+size_t _calculate_capacity(size_t size) {
+  if (size < 100) {
+    return size * 2;
+  } else if (size < 10000) {
+    return size + size / 2;
+  } else if (size < 1000000) {
+    return size + size / 10;
+  }
+  return size + (size / 20);
 }
 
 static inline long long _abs(long long num) { return (num < 0) ? -num : num; }
@@ -66,11 +74,17 @@ static int _create_from_cstr(BigInt *n, const char *cstr, char sign) {
   }
 
   size_t cstr_len = strlen(cstr);
+  n->capacity = _calculate_capacity(cstr_len);
 
-  char *alloc_cstr = strdup(cstr);
+  char *alloc_cstr = _alloc_cstr(n->capacity);
 
-  if (!alloc_cstr) {
+  if (!alloc_cstr)
     return 0;
+
+  size_t j = 0;
+  size_t i = cstr_len;
+  while (i-- > 0) {
+    alloc_cstr[j++] = cstr[i];
   }
 
   n->cstr = alloc_cstr;
@@ -143,33 +157,45 @@ static BigInt *_add_leading_zeroes(BigInt *num, size_t num_of_zeroes) {
   return n;
 }*/
 
-static inline int _less_or_equal_abs(const BigInt *lhs, const BigInt *rhs) {
-  return (lhs->size > rhs->size) ? 0 : 1;
+static int _abs_compare(const BigInt *lhs, const BigInt *rhs) {
+
+  if (lhs->size != rhs->size) {
+    return (lhs->size > rhs->size) ? 1 : -1;
+  }
+
+  for (size_t i = lhs->size; i > 0; i--) {
+    if (lhs->cstr[i - 1] > rhs->cstr[i - 1])
+      return 1;
+    if (lhs->cstr[i - 1] < rhs->cstr[i - 1])
+      return -1;
+  }
+
+  return 0;
 }
 
-/*static BigInt *_calculate_sum(const BigInt *a, const BigInt *b, BigInt *res,
-                              char res_sign) {
+static int _calculate_abs_sum(BigInt *target, const BigInt *source, char res_sign) {
 
-  int digit_diff = a->size - b->size;
+  int compare_res = _abs_compare(target, source);
 
-  BigInt *smaller_abs_num =
-      (digit_diff >= 0) ? bigint_create_copy(b) : bigint_create_copy(a);
+  const BigInt *smaller_abs_num = (compare_res >= 0) ? source : target;
+  const BigInt *greater_abs_num = (compare_res >= 0) ? target : source;
 
-  BigInt *greater_abs_num =
-      (digit_diff >= 0) ? bigint_create_copy(a) : bigint_create_copy(b);
+  size_t max_size = greater_abs_num->size + 1;
 
-  if (!_add_leading_zeroes(smaller_abs_num, digit_diff))
-    return NULL;
+  if (max_size >= target->capacity) {
+    void *new_cstr = realloc(target->cstr, max_size);
 
-  char *sum_str = _alloc_cstr(a->size + 1);
+    if (!new_cstr) {
+      return -1;
+    }
 
-  if (!sum_str)
-    return NULL;
+    target->cstr = new_cstr;
+  }
 
   int add_part = 0;
-  int k = a->size;
+  size_t i = 0;
 
-  for (int i = greater_abs_num->size - 1; i >= 0; i--) {
+  while (i < smaller_abs_num->size) {
     int digit_greater = greater_abs_num->cstr[i] - '0';
     int digit_smaller = smaller_abs_num->cstr[i] - '0';
     int sum = (digit_greater + digit_smaller + add_part);
@@ -181,77 +207,80 @@ static inline int _less_or_equal_abs(const BigInt *lhs, const BigInt *rhs) {
       add_part = 0;
     }
 
-    sum_str[k--] = sum + '0';
+    target->cstr[i++] = sum + '0';
   }
 
-  sum_str[k] = add_part ? '1' : '0';
+  while (i < greater_abs_num->size) {
+    int digit_greater = greater_abs_num->cstr[i] - '0';
+    int sum = digit_greater + add_part;
 
-  res->cstr = sum_str;
-  res->size = a->size + 1;
-  res->sign = res_sign;
+    if (sum > 9) {
+      sum -= 10;
+      add_part = 1;
+    } else {
+      add_part = 0;
+    }
 
-  (diff > 0) ? remove_leading_zeroes(n2) : remove_leading_zeroes(n1);
-  remove_leading_zeroes(res);
-
-  return res;
-}*/
-
-BigInt *bigint_abs(const BigInt *n) {
-
-  if (n == NULL) {
-    return NULL;
+    target->cstr[i++] = sum + '0';
   }
 
-  BigInt *res = bigint_create_copy(n);
-
-  if (res == NULL) {
-    return NULL;
+  if (add_part) {
+    target->cstr[i++] = add_part + '0';
   }
 
-  res->sign = '+';
+  target->size = i;
+  target->sign = res_sign;
 
-  return res;
+  return 0;
 }
 
-/*static BigInt *difference(BigInt *n1, BigInt *n2, BigInt *res) {
+static int _calculate_abs_dif(BigInt *target, const BigInt *source) {
 
-  int n1_less = abs_less(n1, n2);
+  int compare_res = _abs_compare(target, source);
 
-  BigInt *greater_abs = n1_less ? n2 : n1;
-  BigInt *lower_abs = n1_less ? n1 : n2;
-
-  int diff = greater_abs->size - lower_abs->size;
-  add_leading_zeroes(lower_abs, diff);
-
-  char *sum_str = alloc_char_arr(n1->size);
-  if (sum_str == NULL) {
-    return NULL;
-  }
+  const BigInt *smaller_abs_num = (compare_res >= 0) ? source : target;
+  const BigInt *greater_abs_num = (compare_res >= 0) ? target : source;
 
   int substr_part = 0;
-  for (int i = n1->size - 1; i >= 0; i--) {
-    int d_greater = greater_abs->ptr[i] - '0';
-    int d_lower = lower_abs->ptr[i] - '0';
-    int s = (d_greater - d_lower) - substr_part;
+  size_t i = 0;
 
-    if (s < 0) {
-      s += 10;
+  while (i < smaller_abs_num->size) {
+    int digit_greater = greater_abs_num->cstr[i] - '0';
+    int digit_smaller = smaller_abs_num->cstr[i] - '0';
+    int substr = (digit_greater - digit_smaller) - substr_part;
+
+    if (substr < 0) {
+      substr += 10;
       substr_part = 1;
     } else {
       substr_part = 0;
     }
-    sum_str[i] = s + '0';
+    target->cstr[i++] = substr + '0';
   }
 
-  res->ptr = sum_str;
-  res->size = strlen(sum_str);
-  res->sign = n1_less ? (n1->sign == '+' ? '-' : '+') : n1->sign;
+  while (substr_part) {
+    int digit_greater = greater_abs_num->cstr[i] - '0';
+    int substr = digit_greater - substr_part;
 
-  remove_leading_zeroes(lower_abs);
-  remove_leading_zeroes(res);
+    if (substr < 0) {
+      substr += 10;
+      substr_part = 1;
+    } else {
+      substr_part = 0;
+    }
+    target->cstr[i++] = substr + '0';
+  }
 
-  return res;
-}*/
+  target->size = i;
+
+  while (target->size > 1 && target->cstr[target->size - 1] == '0') {
+    target->size--;
+  }
+
+  target->sign = greater_abs_num->sign;
+
+  return 0;
+}
 
 BigInt *bigint_create() {
 
@@ -306,14 +335,14 @@ BigInt *bigint_create_from_num(long long src_num) {
 
   bigint_num->sign = (src_num < 0) ? '-' : '+';
   bigint_num->size = _get_number_of_digits(src_num);
-  bigint_num->capacity = bigint_num->size;
+  bigint_num->capacity = _calculate_capacity(bigint_num->size);
 
-  char *alloc_cstr = _alloc_cstr(bigint_num->size);
+  char *alloc_cstr = _alloc_cstr(bigint_num->capacity);
 
-  if(!alloc_cstr)
+  if (!alloc_cstr)
     return NULL;
 
-  for(size_t i = 0; i < bigint_num->size; ++i){
+  for (size_t i = 0; i < bigint_num->size; ++i) {
     alloc_cstr[i] = (src_num % 10) + '0';
     src_num /= 10;
   }
@@ -323,7 +352,7 @@ BigInt *bigint_create_from_num(long long src_num) {
   return bigint_num;
 }
 
-/*BigInt *bigint_create_from_cstr(const char *cstr) {
+BigInt *bigint_create_from_cstr(const char *cstr) {
 
   if (!cstr)
     return NULL;
@@ -337,13 +366,13 @@ BigInt *bigint_create_from_num(long long src_num) {
 
   if (cstr[0] == '-' || cstr[0] == '+') {
     const char *magnitude = cstr + 1;
-    create_status = _create_from_cstr(&bigint_num, magnitude, cstr[0]);
+    create_status = _create_from_cstr(bigint_num, magnitude, cstr[0]);
   } else {
-    create_status = _create_from_cstr(&bigint_num, cstr, '+');
+    create_status = _create_from_cstr(bigint_num, cstr, '+');
   }
 
   return (create_status == 1) ? bigint_num : free(bigint_num), NULL;
-}*/
+}
 
 /*int bigint_less(const BigInt *lhs, const BigInt *rhs) {
 
@@ -401,50 +430,58 @@ int bigint_greater_or_equal(const BigInt *lhs, const BigInt *rhs) {
   }
 
   return 0;
-}
-
-BigInt *bigint_sum(const BigInt *a, const BigInt *b) {
-
-  if (!a || !b)
-    return NULL;
-
-  BigInt *res = bigint_create();
-
-  if (!res)
-    return NULL;
-
-  if (a->sign == b->sign) {
-    return _calculate_sum(a, b, res, a->sign);
-  }
-
-  return difference(a, b, res);
-}
-
-BigInt *bigint_difference(BigInt *n1, BigInt *n2) {
-
-  if (n1 == NULL || n2 == NULL) {
-    return NULL;
-  }
-
-  BigInt *res = bigint_create();
-
-  if (res == NULL) {
-    return NULL;
-  }
-
-  if (n1->sign == n2->sign) {
-    difference(n1, n2, res);
-  } else if (n1->sign == '+' && n2->sign == '-') {
-    sum(n1, n2, res, '+');
-  } else if (n1->sign == '-' && n2->sign == '+') {
-    sum(n1, n2, res, '-');
-  }
-
-  return res;
 }*/
 
-void bigint_negate(BigInt *bigint_num) {
+BigInt *bigint_assign(BigInt *target, const BigInt *source) {
+
+  if (!target || !source)
+    return NULL;
+
+  int assign_status = 0;
+
+  if (target->sign == source->sign) {
+    assign_status = _calculate_abs_sum(target, source, target->sign);
+  } else {
+    assign_status = _calculate_abs_dif(target, source);
+  }
+
+  return (assign_status == 0) ? target : NULL;
+}
+
+BigInt *bigint_substract(BigInt *target, const BigInt *source) {
+
+  if (!target || !source)
+    return NULL;
+
+  if (target->sign == source->sign) {
+    _calculate_abs_dif(target, source);
+  } else if (target->sign == '+' && source->sign == '-') {
+    _calculate_abs_sum(target, source, '+');
+  } else if (target->sign == '-' && source->sign == '+') {
+    _calculate_abs_sum(target, source, '-');
+  }
+
+  return target;
+}
+
+BigInt *bigint_abs(BigInt *bigint_num) {
+
+  if (!bigint_num)
+    return NULL;
+
+  bigint_num->sign = '+';
+
+  return bigint_num;
+}
+
+BigInt *bigint_negate(BigInt *bigint_num) {
+
+  if (!bigint_num)
+    return NULL;
+
   bigint_num->sign = (bigint_num->sign == '+') ? '-' : '+';
+
+  return bigint_num;
 }
 
 void bigint_free(BigInt *bigint_num) {

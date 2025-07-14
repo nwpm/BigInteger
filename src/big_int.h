@@ -25,12 +25,13 @@ int bigint_less_or_equal(const BigInt *lhs, const BigInt *rhs);
 int bigint_greater_or_equal(const BigInt *lhs, const BigInt *rhs);
 int bigint_is_equal(const BigInt *lhs, const BigInt *rhs);
 
-BigInt *bigint_sum(const BigInt *a, const BigInt *b);
-BigInt *bigint_difference(BigInt *a, BigInt *b);
+BigInt *bigint_assign(BigInt *target, const BigInt *source);
+BigInt *bigint_difference(BigInt *a, const BigInt *b);
 BigInt *bigint_multiply(const BigInt *n1, unsigned int n2);
-BigInt *bigint_abs(const BigInt *n);
 
-void bigint_negate(BigInt *bigint_num);
+BigInt *bigint_negate(BigInt *bigint_num);
+BigInt *bigint_abs(BigInt *bigint_num);
+
 void bigint_free(BigInt *bigint_num);
 
 #endif // BIG_INT_H
