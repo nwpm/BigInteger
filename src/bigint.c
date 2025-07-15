@@ -1,4 +1,4 @@
-#include "big_int.h"
+#include "bigint.h"
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,7 +28,7 @@ static int _is_valid_cstr(const char *cstr) {
   return 1;
 }
 
-size_t _calculate_capacity(size_t size) {
+static size_t _calculate_capacity(size_t size) {
   if (size < 100) {
     return size * 2;
   } else if (size < 10000) {
@@ -61,7 +61,10 @@ static int _create_from_cstr(BigInt *n, const char *cstr, char sign) {
   }
 
   size_t cstr_len = strlen(cstr);
-  n->capacity = _calculate_capacity(cstr_len);
+
+  if (cstr_len >= n->capacity) {
+    n->capacity = _calculate_capacity(cstr_len);
+  }
 
   char *alloc_cstr = _alloc_cstr(n->capacity);
 
@@ -81,6 +84,18 @@ static int _create_from_cstr(BigInt *n, const char *cstr, char sign) {
   return 1;
 }
 
+static char* _str_dup(const BigInt *num){
+
+  char* copy_buff = malloc(num->capacity);
+
+  if(!copy_buff)
+    return NULL;
+
+  memcpy(copy_buff, num->cstr, num->size);
+
+  return copy_buff;
+}
+
 static int _abs_compare(const BigInt *lhs, const BigInt *rhs) {
 
   if (lhs->size != rhs->size) {
@@ -97,7 +112,8 @@ static int _abs_compare(const BigInt *lhs, const BigInt *rhs) {
   return 0;
 }
 
-static int _calculate_abs_sum(BigInt *target, const BigInt *source, char res_sign) {
+static int _calculate_abs_sum(BigInt *target, const BigInt *source,
+                              char res_sign) {
 
   int compare_res = _abs_compare(target, source);
 
@@ -240,7 +256,7 @@ BigInt *bigint_create_copy(const BigInt *src_num) {
     return new_num;
   }
 
-  new_num->cstr = strdup(src_num->cstr);
+  new_num->cstr = _str_dup(src_num);
 
   if (!new_num->cstr) {
     free(new_num);
@@ -259,16 +275,21 @@ BigInt *bigint_create_from_num(long long src_num) {
 
   bigint_num->sign = (src_num < 0) ? '-' : '+';
   bigint_num->size = _get_number_of_digits(src_num);
-  bigint_num->capacity = _calculate_capacity(bigint_num->size);
+
+  if (bigint_num->size >= BIGINT_START_CAPACITY) {
+    bigint_num->capacity = _calculate_capacity(bigint_num->size);
+  }
 
   char *alloc_cstr = _alloc_cstr(bigint_num->capacity);
 
   if (!alloc_cstr)
     return NULL;
 
+  long long abs_num = _abs(src_num);
+
   for (size_t i = 0; i < bigint_num->size; ++i) {
-    alloc_cstr[i] = (src_num % 10) + '0';
-    src_num /= 10;
+    alloc_cstr[i] = (abs_num % 10) + '0';
+    abs_num /= 10;
   }
 
   bigint_num->cstr = alloc_cstr;
@@ -295,7 +316,7 @@ BigInt *bigint_create_from_cstr(const char *cstr) {
     create_status = _create_from_cstr(bigint_num, cstr, '+');
   }
 
-  if(create_status != 1){
+  if (create_status != 1) {
     free(bigint_num);
     return NULL;
   }
@@ -345,14 +366,14 @@ int bigint_greater_or_equal(const BigInt *lhs, const BigInt *rhs) {
   return 1;
 }
 
-static int _cstr_cmp(const BigInt* a, const BigInt *b){
+static int _cstr_cmp(const BigInt *a, const BigInt *b) {
 
-  if(a->size == 0){
+  if (a->size == 0) {
     return 1;
   }
 
-  for(size_t i = a->size; i > 0; --i){
-    if(a->cstr[i - 1] != b->cstr[i - 1]){
+  for (size_t i = a->size; i > 0; --i) {
+    if (a->cstr[i - 1] != b->cstr[i - 1]) {
       return 0;
     }
   }
@@ -362,9 +383,9 @@ static int _cstr_cmp(const BigInt* a, const BigInt *b){
 
 int bigint_is_equal(const BigInt *lhs, const BigInt *rhs) {
 
-  if(lhs->size == rhs->size){
-    if(lhs->sign == rhs->sign){
-      if(_cstr_cmp(lhs, rhs)){
+  if (lhs->size == rhs->size) {
+    if (lhs->sign == rhs->sign) {
+      if (_cstr_cmp(lhs, rhs)) {
         return 1;
       }
     }

@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-#define BIGINT_START_CAPACITY 8
+#define BIGINT_START_CAPACITY 4
 
 typedef struct BigInt {
 
