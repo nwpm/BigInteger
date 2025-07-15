@@ -6,16 +6,19 @@ SRC_DIR   = src
 BIN_DIR   = bin
 TEST_DIR  = test
 
+BIGINT_SRC  = $(SRC_DIR)/bigint.c 
+
+UNITY_DIR   = $(TEST_DIR)/Unity
+UNITY_BUILD = build/Unity
+
+TEST_SRC    = $(TEST_DIR)/test_bigint.c
+
 # === Compiler ===
 CC     = gcc
-CFLAGS = -Wall -Wextra -Wpedantic -std=gnu99
+CFLAGS = -Wall -Wextra -pedantic -std=gnu99
 
 DEBUG_FLAGS   = -g -O0 -fsanitize=address
 RELEASE_FLAGS = -O2
-
-# === Unity ===
-UNITY_DIR   = $(TEST_DIR)/Unity
-UNITY_BUILD = build/Unity
 
 # === Build type ===
 BUILD_TYPE ?= debug
@@ -31,13 +34,17 @@ else
 endif
 
 LIB_TARGET = $(BUILD_DIR)/lib$(PROJECT_NAME).a
-OBJ_LIB    = src/lib$(PROJECT_NAME).o
+OBJ_LIB    = $(BUILD_DIR)/lib$(PROJECT_NAME).o
 
 TEST_TARGET = $(BIN_DIR)/test_bigint
 TEST_OBJ    = $(TEST_DIR)/test_bigint.o
 
 # ===Targets===
-.PHONY: bigint tests unity install uninstall clean
+.PHONY: all debug release tests unity install uninstall cllib clunity clall
+
+all:
+	$(MAKE) unity
+	$(MAKE) BUILD_TYPE=debug
 
 bigint: $(LIB_TARGET)
 
@@ -51,10 +58,10 @@ unity: $(UNITY_BUILD)
 tests: $(TEST_TARGET)
 
 debug:
-	$(MAKE) BUILD_TYPE=debug
+	$(MAKE) BUILD_TYPE=debug bigint
 
 release:
-	$(MAKE) BUILD_TYPE=release
+	$(MAKE) BUILD_TYPE=release bigint
 
 install: $(LIB_TARGET)
 	install -d /usr/local/lib/ /usr/local/include/
@@ -65,24 +72,32 @@ uninstall:
 	rm -f /usr/local/lib/lib$(PROJECT_NAME).a
 	rm -f /usr/local/include/big_int.h
 
-clean :
+cllib:
 	rm -rf $(BUILD_DIR)/*
 	rm -rf $(BIN_DIR)/*
+
+clunity:
+	rm -rf $(UNITY_BUILD)/*
+	rm $(SRC_DIR)/unity*.h
+
+clall:
+	$(MAKE) cllib
+	$(MAKE) clunity
 
 # === Build Rules ===
 
 $(TEST_TARGET): $(TEST_OBJ)
-	$(CC) $(CFLAGS) -Isrc/ -L$(BUILD_DIR) -L$(UNITY_BUILD) $< -o $@ -lbigint -lunity
+	$(CC) $(CFLAGS) -I$(SRC_DIR) -L$(BUILD_DIR) -L$(UNITY_BUILD) $< -o $@ -lbigint -lunity
 	rm $(TEST_OBJ)
 
-$(TEST_OBJ) : $(TEST_DIR)/test_bigint.c
+$(TEST_OBJ) : $(TEST_SRC)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(LIB_TARGET) : $(OBJ_LIB) | $(BUILD_DIR)
 	ar rcs $@ $<
 	rm -r $(OBJ_LIB)
 
-$(OBJ_LIB): $(SRC_DIR)/big_int.c
+$(OBJ_LIB): $(BIGINT_SRC)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR):
