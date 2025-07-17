@@ -1,13 +1,14 @@
 #include "../src/bigint.h"
 #include "./Unity/src/unity.h"
 #include "./Unity/src/unity_internals.h"
+#include <stdio.h>
 #include <stdlib.h>
 
 void setUp() {}
 void tearDown() {}
 
-char *_create_and_fill_long_cstr(size_t size, unsigned char fill_by,
-                                 unsigned char sign) {
+char *_create_and_fill_long_buffer(size_t size, unsigned char fill_by,
+                                   unsigned char sign) {
 
   char *str = calloc(size + 2, sizeof(char));
 
@@ -25,8 +26,8 @@ char *_create_and_fill_long_cstr(size_t size, unsigned char fill_by,
   return str;
 }
 
-int _check_is_correct_cstr(const char *source, const char *expected,
-                           size_t size) {
+int _check_is_correct_buffer(const char *source, const char *expected,
+                             size_t size) {
 
   size_t j = 0;
   size_t i = size - 1;
@@ -39,7 +40,7 @@ int _check_is_correct_cstr(const char *source, const char *expected,
   return 0;
 }
 
-void test_bigint_create() {
+void test_create() {
 
   BigInt *bigint_num = bigint_create();
 
@@ -48,595 +49,410 @@ void test_bigint_create() {
   TEST_ASSERT_EQUAL_size_t(0, bigint_num->size);
   TEST_ASSERT_EQUAL_size_t(BIGINT_START_CAPACITY, bigint_num->capacity);
   TEST_ASSERT_EQUAL_CHAR('+', bigint_num->sign);
-  TEST_ASSERT_NULL(bigint_num->cstr);
+  TEST_ASSERT_NULL(bigint_num->buffer);
 
   bigint_free(bigint_num);
 }
 
-void test_bigint_create_from_num_zero() {
+typedef struct TestCreateFromNum {
+  long long input_num;
+  size_t expected_size;
+  size_t expected_capacity;
+  char expected_sign;
+  const char *expected_buffer;
+} TestCreateFromNum;
 
-  BigInt *bigint_num = bigint_create_from_num(0);
+TestCreateFromNum create_from_num_cases[] = {
+    {0, 1, 4, '+', "0"},
+    {10, 2, 4, '+', "10"},
+    {9876, 4, 8, '+', "9876"},
+    {1e12 - 1, 12, 24, '+', "999999999999"},
+    {-10, 2, 4, '-', "10"},
+    {-9876, 4, 8, '-', "9876"},
+    {-1e12 + 1, 12, 24, '-', "999999999999"},
+};
 
-  TEST_ASSERT_NOT_NULL(bigint_num);
+void tests_create_from_num() {
+  size_t num_of_tests =
+      sizeof(create_from_num_cases) / sizeof(create_from_num_cases[0]);
+  for (size_t i = 0; i < num_of_tests; ++i) {
 
-  TEST_ASSERT_EQUAL_size_t(1, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(BIGINT_START_CAPACITY, bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('+', bigint_num->sign);
-  TEST_ASSERT_EQUAL_CHAR('0', bigint_num->cstr[0]);
+    char message[256];
+    sprintf(message, "Case %zu: Input num %lld", i,
+            create_from_num_cases[i].input_num);
 
-  bigint_free(bigint_num);
+    BigInt *bigint_num =
+        bigint_create_from_num(create_from_num_cases[i].input_num);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(bigint_num, message);
+
+    TEST_ASSERT_EQUAL_size_t_MESSAGE(create_from_num_cases[i].expected_size,
+                                     bigint_num->size, message);
+    TEST_ASSERT_EQUAL_size_t_MESSAGE(create_from_num_cases[i].expected_capacity,
+                                     bigint_num->capacity, message);
+    TEST_ASSERT_EQUAL_CHAR_MESSAGE(create_from_num_cases[i].expected_sign,
+                                   bigint_num->sign, message);
+
+    TEST_ASSERT_EQUAL_INT_MESSAGE(
+        0,
+        _check_is_correct_buffer(bigint_num->buffer,
+                                 create_from_num_cases[i].expected_buffer,
+                                 bigint_num->size),
+        message);
+
+    bigint_free(bigint_num);
+  }
 }
 
-void test_bigint_create_from_num_pos_less_100() {
+typedef struct TestCreateFromCstr {
+  const char *input_cstr;
+  size_t expected_size;
+  size_t expected_capacity;
+  char expected_sign;
+  const char *expected_buffer;
+} TestCreateFromCstr;
 
-  BigInt *bigint_num = bigint_create_from_num(10);
+TestCreateFromCstr create_from_cstr_cases[] = {
+    {"0", 1, 4, '+', "0"},
+    {"-0", 1, 4, '-', "0"},
+    {"99", 2, 4, '+', "99"},
+    {"-123456", 6, 12, '-', "123456"},
+    {"999999999999", 12, 24, '+', "999999999999"},
+    {"-999999999999", 12, 24, '-', "999999999999"},
+};
 
-  TEST_ASSERT_NOT_NULL(bigint_num);
+void tests_create_from_cstr() {
+  size_t num_of_tests =
+      sizeof(create_from_cstr_cases) / sizeof(create_from_cstr_cases[0]);
+  for (size_t i = 0; i < num_of_tests; ++i) {
 
-  TEST_ASSERT_EQUAL_size_t(2, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(BIGINT_START_CAPACITY, bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('+', bigint_num->sign);
+    char message[256];
+    sprintf(message, "Case %zu: Input cstr %s", i,
+            create_from_cstr_cases[i].input_cstr);
 
-  TEST_ASSERT_EQUAL_INT(
-      0, _check_is_correct_cstr(bigint_num->cstr, "10", bigint_num->size));
+    BigInt *bigint_num =
+        bigint_create_from_cstr(create_from_cstr_cases[i].input_cstr);
 
-  bigint_free(bigint_num);
+    TEST_ASSERT_NOT_NULL_MESSAGE(bigint_num, message);
+
+    TEST_ASSERT_EQUAL_size_t_MESSAGE(create_from_cstr_cases[i].expected_size,
+                                     bigint_num->size, message);
+    TEST_ASSERT_EQUAL_size_t_MESSAGE(
+        create_from_cstr_cases[i].expected_capacity, bigint_num->capacity,
+        message);
+    TEST_ASSERT_EQUAL_CHAR_MESSAGE(create_from_cstr_cases[i].expected_sign,
+                                   bigint_num->sign, message);
+
+    TEST_ASSERT_EQUAL_INT_MESSAGE(
+        0,
+        _check_is_correct_buffer(bigint_num->buffer,
+                                 create_from_cstr_cases[i].expected_buffer,
+                                 bigint_num->size),
+        message);
+
+    bigint_free(bigint_num);
+  }
 }
 
-void test_bigint_create_from_num_pos_less_10000() {
+typedef struct TestCreateCopy {
 
-  BigInt *bigint_num = bigint_create_from_num(9876);
+  const char *input_cstr;
+  size_t expected_size;
+  size_t expected_capacity;
+  char expected_sign;
+  const char *expected_buffer;
+} TestCreateCopy;
 
-  TEST_ASSERT_NOT_NULL(bigint_num);
+TestCreateCopy create_copy_cases[] = {
+    {"", 0, 4, '+', NULL},
+    {"0", 1, 4, '+', "0"},
+    {"987", 3, 4, '+', "987"},
+    {"-987", 3, 4, '-', "987"},
+    {"-123456", 6, 12, '-', "123456"},
+    {"999999999999", 12, 24, '+', "999999999999"},
+    {"-999999999999", 12, 24, '-', "999999999999"},
+};
 
-  TEST_ASSERT_EQUAL_size_t(4, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(bigint_num->size * 2, bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('+', bigint_num->sign);
+void tests_create_copy() {
+  size_t num_of_tests =
+      sizeof(create_copy_cases) / sizeof(create_copy_cases[0]);
+  for (size_t i = 0; i < num_of_tests; ++i) {
 
-  TEST_ASSERT_EQUAL_INT(
-      0, _check_is_correct_cstr(bigint_num->cstr, "9876", bigint_num->size));
+    char message[256];
+    sprintf(message, "Case %zu: Input cstr %s", i,
+            create_copy_cases[i].input_cstr);
 
-  bigint_free(bigint_num);
+    BigInt *source = bigint_create_from_cstr(create_copy_cases[i].input_cstr);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(source, message);
+
+    BigInt *bigint_num = bigint_create_copy(source);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(bigint_num, message);
+
+    TEST_ASSERT_EQUAL_size_t_MESSAGE(create_copy_cases[i].expected_size,
+                                     bigint_num->size, message);
+    TEST_ASSERT_EQUAL_size_t_MESSAGE(create_copy_cases[i].expected_capacity,
+                                     bigint_num->capacity, message);
+    TEST_ASSERT_EQUAL_CHAR_MESSAGE(create_copy_cases[i].expected_sign,
+                                   bigint_num->sign, message);
+
+    TEST_ASSERT_EQUAL_INT_MESSAGE(
+        0,
+        _check_is_correct_buffer(bigint_num->buffer,
+                                 create_copy_cases[i].expected_buffer,
+                                 bigint_num->size),
+        message);
+
+    bigint_free(bigint_num);
+    bigint_free(source);
+  }
 }
 
-void test_bigint_create_from_num_pos_less_1e12() {
+typedef struct TestLess {
 
-  BigInt *bigint_num = bigint_create_from_num(1e12 - 1);
+  const char *lhs_cstr;
+  const char *rhs_cstr;
+  int expected_res;
+} TestLess;
 
-  TEST_ASSERT_NOT_NULL(bigint_num);
+TestLess less_cases[] = {
+    {"0", "0", 0},    {"10", "10", 0},  {"-10", "-10", 0},
+    {"1", "-1", 0},   {"-1", "1", 1},   {"1234", "12", 0},
+    {"-12", "-1", 1}, {"0", "1000", 1}, {"-1000", "0", 1},
+};
 
-  TEST_ASSERT_EQUAL_size_t(12, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(bigint_num->size * 2, bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('+', bigint_num->sign);
+void tests_less() {
+  size_t num_of_tests = sizeof(less_cases) / sizeof(less_cases[0]);
+  for (size_t i = 0; i < num_of_tests; ++i) {
 
-  TEST_ASSERT_EQUAL_INT(0,
-                        _check_is_correct_cstr(bigint_num->cstr, "999999999999",
-                                               bigint_num->size));
+    char message[256];
+    sprintf(message, "Case %zu: Input lhs %s, input rhs %s", i,
+            less_cases[i].lhs_cstr, less_cases[i].rhs_cstr);
 
-  bigint_free(bigint_num);
+    BigInt *lhs = bigint_create_from_cstr(less_cases[i].lhs_cstr);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(lhs, message);
+
+    BigInt *rhs = bigint_create_from_cstr(less_cases[i].rhs_cstr);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(rhs, message);
+
+    TEST_ASSERT_EQUAL_INT_MESSAGE(less_cases[i].expected_res,
+                                  bigint_less(lhs, rhs), message);
+
+    bigint_free(lhs);
+    bigint_free(rhs);
+  }
 }
 
-void test_bigint_create_from_num_neg_less_100() {
+typedef struct TestGreater {
 
-  BigInt *bigint_num = bigint_create_from_num(-10);
+  const char *lhs_cstr;
+  const char *rhs_cstr;
+  int expected_res;
+} TestGreater;
 
-  TEST_ASSERT_NOT_NULL(bigint_num);
+TestLess greater_cases[] = {
+    {"0", "0", 0},    {"10", "10", 0},  {"-10", "-10", 0},
+    {"1", "-1", 1},   {"-1", "1", 0},   {"1234", "12", 1},
+    {"-12", "-1", 0}, {"0", "1000", 0}, {"-1000", "0", 0},
+};
 
-  TEST_ASSERT_EQUAL_size_t(2, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(BIGINT_START_CAPACITY, bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('-', bigint_num->sign);
+void tests_greater() {
+  size_t num_of_tests = sizeof(greater_cases) / sizeof(greater_cases[0]);
+  for (size_t i = 0; i < num_of_tests; ++i) {
 
-  TEST_ASSERT_EQUAL_INT(
-      0, _check_is_correct_cstr(bigint_num->cstr, "10", bigint_num->size));
+    char message[256];
+    sprintf(message, "Case %zu: Input lhs %s, input rhs %s", i,
+            greater_cases[i].lhs_cstr, greater_cases[i].rhs_cstr);
 
-  bigint_free(bigint_num);
+    BigInt *lhs = bigint_create_from_cstr(greater_cases[i].lhs_cstr);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(lhs, message);
+
+    BigInt *rhs = bigint_create_from_cstr(greater_cases[i].rhs_cstr);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(rhs, message);
+
+    TEST_ASSERT_EQUAL_INT_MESSAGE(greater_cases[i].expected_res,
+                                  bigint_greater(lhs, rhs), message);
+
+    bigint_free(lhs);
+    bigint_free(rhs);
+  }
 }
 
-void test_bigint_create_from_num_neg_less_10000() {
+typedef struct TestIsEqual {
 
-  BigInt *bigint_num = bigint_create_from_num(-9876);
+  const char *lhs_cstr;
+  const char *rhs_cstr;
+  int expected_res;
+} TestIsEqual;
 
-  TEST_ASSERT_NOT_NULL(bigint_num);
+TestIsEqual is_equal_cases[] = {
+    {"0", "0", 1},    {"10", "10", 1},  {"-10", "-10", 1},
+    {"1", "-1", 0},   {"-1", "1", 0},   {"1234", "12", 0},
+    {"-12", "-1", 0}, {"0", "1000", 0}, {"-1000", "0", 0},
+};
 
-  TEST_ASSERT_EQUAL_size_t(4, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(bigint_num->size * 2, bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('-', bigint_num->sign);
+void tests_is_equal() {
+  size_t num_of_tests = sizeof(is_equal_cases) / sizeof(is_equal_cases[0]);
+  for (size_t i = 0; i < num_of_tests; ++i) {
 
-  TEST_ASSERT_EQUAL_INT(
-      0, _check_is_correct_cstr(bigint_num->cstr, "9876", bigint_num->size));
+    char message[256];
+    sprintf(message, "Case %zu: Input lhs %s, input rhs %s", i,
+            is_equal_cases[i].lhs_cstr, is_equal_cases[i].rhs_cstr);
 
-  bigint_free(bigint_num);
+    BigInt *lhs = bigint_create_from_cstr(is_equal_cases[i].lhs_cstr);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(lhs, message);
+
+    BigInt *rhs = bigint_create_from_cstr(is_equal_cases[i].rhs_cstr);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(rhs, message);
+
+    TEST_ASSERT_EQUAL_INT_MESSAGE(is_equal_cases[i].expected_res,
+                                  bigint_is_equal(lhs, rhs), message);
+
+    bigint_free(lhs);
+    bigint_free(rhs);
+  }
 }
 
-void test_bigint_create_from_num_neg_less_1e12() {
+typedef struct TestLessOrEqual {
 
-  BigInt *bigint_num = bigint_create_from_num(-1e12 + 1);
+  const char *lhs_cstr;
+  const char *rhs_cstr;
+  int expected_res;
+} TestLessOrEqual;
 
-  TEST_ASSERT_NOT_NULL(bigint_num);
+TestLessOrEqual less_or_equal_cases[] = {
+    {"0", "0", 1},    {"10", "10", 1},  {"-10", "-10", 1},
+    {"1", "-1", 0},   {"-1", "1", 1},   {"1234", "12", 0},
+    {"-12", "-1", 1}, {"0", "1000", 1}, {"-1000", "0", 1},
+};
 
-  TEST_ASSERT_EQUAL_size_t(12, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(bigint_num->size * 2, bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('-', bigint_num->sign);
+void tests_less_or_equal() {
+  size_t num_of_tests =
+      sizeof(less_or_equal_cases) / sizeof(less_or_equal_cases[0]);
+  for (size_t i = 0; i < num_of_tests; ++i) {
 
-  TEST_ASSERT_EQUAL_INT(0,
-                        _check_is_correct_cstr(bigint_num->cstr, "999999999999",
-                                               bigint_num->size));
+    char message[256];
+    sprintf(message, "Case %zu: Input lhs %s, input rhs %s", i,
+            less_or_equal_cases[i].lhs_cstr, less_or_equal_cases[i].rhs_cstr);
 
-  bigint_free(bigint_num);
+    BigInt *lhs = bigint_create_from_cstr(less_or_equal_cases[i].lhs_cstr);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(lhs, message);
+
+    BigInt *rhs = bigint_create_from_cstr(less_or_equal_cases[i].rhs_cstr);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(rhs, message);
+
+    TEST_ASSERT_EQUAL_INT_MESSAGE(less_or_equal_cases[i].expected_res,
+                                  bigint_less_or_equal(lhs, rhs), message);
+
+    bigint_free(lhs);
+    bigint_free(rhs);
+  }
 }
 
-void test_bigint_create_from_cstr_pos_zero() {
+typedef struct TestGreaterOrEqual {
 
-  BigInt *bigint_num = bigint_create_from_cstr("0");
+  const char *lhs_cstr;
+  const char *rhs_cstr;
+  int expected_res;
+} TestGreaterOrEqual;
 
-  TEST_ASSERT_NOT_NULL(bigint_num);
+TestGreaterOrEqual greater_or_equal_cases[] = {
+    {"0", "0", 1},    {"10", "10", 1},  {"-10", "-10", 1},
+    {"1", "-1", 1},   {"-1", "1", 0},   {"1234", "12", 1},
+    {"-12", "-1", 0}, {"0", "1000", 0}, {"-1000", "0", 0},
+};
 
-  TEST_ASSERT_EQUAL_size_t(1, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(BIGINT_START_CAPACITY, bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('+', bigint_num->sign);
+void tests_greater_or_equal() {
+  size_t num_of_tests =
+      sizeof(greater_or_equal_cases) / sizeof(greater_or_equal_cases[0]);
+  for (size_t i = 0; i < num_of_tests; ++i) {
 
-  TEST_ASSERT_EQUAL_INT(
-      0, _check_is_correct_cstr(bigint_num->cstr, "0", bigint_num->size));
+    char message[256];
+    sprintf(message, "Case %zu: Input lhs %s, input rhs %s", i,
+            greater_or_equal_cases[i].lhs_cstr,
+            greater_or_equal_cases[i].rhs_cstr);
 
-  bigint_free(bigint_num);
+    BigInt *lhs = bigint_create_from_cstr(greater_or_equal_cases[i].lhs_cstr);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(lhs, message);
+
+    BigInt *rhs = bigint_create_from_cstr(greater_or_equal_cases[i].rhs_cstr);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(rhs, message);
+
+    TEST_ASSERT_EQUAL_INT_MESSAGE(greater_or_equal_cases[i].expected_res,
+                                  bigint_greater_or_equal(lhs, rhs), message);
+
+    bigint_free(lhs);
+    bigint_free(rhs);
+  }
 }
 
-void test_bigint_create_from_cstr_neg_zero() {
-
-  BigInt *bigint_num = bigint_create_from_cstr("-0");
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  TEST_ASSERT_EQUAL_size_t(1, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(BIGINT_START_CAPACITY, bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('-', bigint_num->sign);
-
-  TEST_ASSERT_EQUAL_INT(
-      0, _check_is_correct_cstr(bigint_num->cstr, "0", bigint_num->size));
-
-  bigint_free(bigint_num);
-}
-
-void test_bigint_create_from_cstr_pos_size_2b() {
-
-  BigInt *bigint_num = bigint_create_from_cstr("99");
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  TEST_ASSERT_EQUAL_size_t(2, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(BIGINT_START_CAPACITY, bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('+', bigint_num->sign);
-
-  TEST_ASSERT_EQUAL_INT(
-      0, _check_is_correct_cstr(bigint_num->cstr, "99", bigint_num->size));
-
-  bigint_free(bigint_num);
-}
-
-void test_bigint_create_from_cstr_pos_size_6b() {
-
-  BigInt *bigint_num = bigint_create_from_cstr("123456");
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  TEST_ASSERT_EQUAL_size_t(6, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(bigint_num->size * 2, bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('+', bigint_num->sign);
-
-  TEST_ASSERT_EQUAL_INT(
-      0, _check_is_correct_cstr(bigint_num->cstr, "123456", bigint_num->size));
-
-  bigint_free(bigint_num);
-}
-
-void test_bigint_create_from_cstr_pos_size_64b() {
-
-  char *source_cstr = _create_and_fill_long_cstr(64, '1', '+');
-
-  TEST_ASSERT_NOT_NULL(source_cstr);
-
-  BigInt *bigint_num = bigint_create_from_cstr(source_cstr);
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  TEST_ASSERT_EQUAL_size_t(64, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(bigint_num->size * 2, bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('+', bigint_num->sign);
-
-  TEST_ASSERT_EQUAL_INT(0, _check_is_correct_cstr(bigint_num->cstr,
-                                                  source_cstr + 1,
-                                                  bigint_num->size));
-
-  free(source_cstr);
-  bigint_free(bigint_num);
-}
-
-void test_bigint_create_from_cstr_pos_size_1kb() {
-
-  char *source_cstr = _create_and_fill_long_cstr(1000, '1', '+');
-
-  TEST_ASSERT_NOT_NULL(source_cstr);
-
-  BigInt *bigint_num = bigint_create_from_cstr(source_cstr);
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  TEST_ASSERT_EQUAL_size_t(1000, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(bigint_num->size + bigint_num->size / 2,
-                           bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('+', bigint_num->sign);
-
-  TEST_ASSERT_EQUAL_INT(0, _check_is_correct_cstr(bigint_num->cstr,
-                                                  source_cstr + 1,
-                                                  bigint_num->size));
-
-  free(source_cstr);
-  bigint_free(bigint_num);
-}
-
-void test_bigint_create_from_cstr_pos_size_100kb() {
-
-  char *source_cstr = _create_and_fill_long_cstr(1e5, '1', '+');
-
-  TEST_ASSERT_NOT_NULL(source_cstr);
-
-  source_cstr[4] = '9';
-
-  BigInt *bigint_num = bigint_create_from_cstr(source_cstr);
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  TEST_ASSERT_EQUAL_size_t(1e5, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(bigint_num->size + bigint_num->size / 10,
-                           bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('+', bigint_num->sign);
-
-  TEST_ASSERT_EQUAL_INT(0, _check_is_correct_cstr(bigint_num->cstr,
-                                                  source_cstr + 1,
-                                                  bigint_num->size));
-
-  free(source_cstr);
-  bigint_free(bigint_num);
-}
-
-void test_bigint_create_from_cstr_pos_size_100Mb() {
-
-  char *source_cstr = _create_and_fill_long_cstr(1e8, '1', '+');
-
-  TEST_ASSERT_NOT_NULL(source_cstr);
-
-  source_cstr[4] = '9';
-
-  BigInt *bigint_num = bigint_create_from_cstr(source_cstr);
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  TEST_ASSERT_EQUAL_size_t(1e8, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(bigint_num->size + bigint_num->size / 20,
-                           bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('+', bigint_num->sign);
-
-  TEST_ASSERT_EQUAL_INT(0, _check_is_correct_cstr(bigint_num->cstr,
-                                                  source_cstr + 1,
-                                                  bigint_num->size));
-
-  free(source_cstr);
-  bigint_free(bigint_num);
-}
-
-void test_bigint_create_from_cstr_pos_size_2Gb() {
-
-  char *source_cstr = _create_and_fill_long_cstr(2e9, '1', '+');
-
-  TEST_ASSERT_NOT_NULL(source_cstr);
-
-  source_cstr[4] = '9';
-
-  BigInt *bigint_num = bigint_create_from_cstr(source_cstr);
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  TEST_ASSERT_EQUAL_size_t(2e9, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(bigint_num->size + bigint_num->size / 20,
-                           bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('+', bigint_num->sign);
-
-  TEST_ASSERT_EQUAL_INT(0, _check_is_correct_cstr(bigint_num->cstr,
-                                                  source_cstr + 1,
-                                                  bigint_num->size));
-
-  free(source_cstr);
-  bigint_free(bigint_num);
-}
-
-void test_bigint_create_from_cstr_neg_size_2b() {
-
-  BigInt *bigint_num = bigint_create_from_cstr("-99");
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  TEST_ASSERT_EQUAL_size_t(2, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(BIGINT_START_CAPACITY, bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('-', bigint_num->sign);
-
-  TEST_ASSERT_EQUAL_INT(
-      0, _check_is_correct_cstr(bigint_num->cstr, "99", bigint_num->size));
-
-  bigint_free(bigint_num);
-}
-
-void test_bigint_create_from_cstr_neg_size_6b() {
-
-  BigInt *bigint_num = bigint_create_from_cstr("-123456");
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  TEST_ASSERT_EQUAL_size_t(6, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(bigint_num->size * 2, bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('-', bigint_num->sign);
-
-  TEST_ASSERT_EQUAL_INT(
-      0, _check_is_correct_cstr(bigint_num->cstr, "123456", bigint_num->size));
-
-  bigint_free(bigint_num);
-}
-
-void test_bigint_create_from_cstr_neg_size_64b() {
-
-  char *source_cstr = _create_and_fill_long_cstr(64, '1', '-');
-
-  TEST_ASSERT_NOT_NULL(source_cstr);
-
-  BigInt *bigint_num = bigint_create_from_cstr(source_cstr);
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  TEST_ASSERT_EQUAL_size_t(64, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(bigint_num->size * 2, bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('-', bigint_num->sign);
-
-  TEST_ASSERT_EQUAL_INT(0, _check_is_correct_cstr(bigint_num->cstr,
-                                                  source_cstr + 1,
-                                                  bigint_num->size));
-
-  free(source_cstr);
-  bigint_free(bigint_num);
-}
-
-void test_bigint_create_from_cstr_neg_size_1kb() {
-
-  char *source_cstr = _create_and_fill_long_cstr(1000, '1', '-');
-
-  TEST_ASSERT_NOT_NULL(source_cstr);
-
-  source_cstr[4] = '9';
-
-  BigInt *bigint_num = bigint_create_from_cstr(source_cstr);
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  TEST_ASSERT_EQUAL_size_t(1000, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(bigint_num->size + bigint_num->size / 2,
-                           bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('-', bigint_num->sign);
-
-  TEST_ASSERT_EQUAL_INT(0, _check_is_correct_cstr(bigint_num->cstr,
-                                                  source_cstr + 1,
-                                                  bigint_num->size));
-
-  free(source_cstr);
-  bigint_free(bigint_num);
-}
-
-void test_bigint_create_from_cstr_neg_size_100kb() {
-
-  char *source_cstr = _create_and_fill_long_cstr(1e5, '1', '-');
-
-  TEST_ASSERT_NOT_NULL(source_cstr);
-
-  source_cstr[4] = '9';
-
-  BigInt *bigint_num = bigint_create_from_cstr(source_cstr);
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  TEST_ASSERT_EQUAL_size_t(1e5, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(bigint_num->size + bigint_num->size / 10,
-                           bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('-', bigint_num->sign);
-
-  TEST_ASSERT_EQUAL_INT(0, _check_is_correct_cstr(bigint_num->cstr,
-                                                  source_cstr + 1,
-                                                  bigint_num->size));
-
-  free(source_cstr);
-  bigint_free(bigint_num);
-}
-
-void test_bigint_create_from_cstr_neg_size_100Mb() {
-
-  char *source_cstr = _create_and_fill_long_cstr(1e8, '1', '-');
-
-  TEST_ASSERT_NOT_NULL(source_cstr);
-
-  source_cstr[4] = '9';
-
-  BigInt *bigint_num = bigint_create_from_cstr(source_cstr);
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  TEST_ASSERT_EQUAL_size_t(1e8, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(bigint_num->size + bigint_num->size / 20,
-                           bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('-', bigint_num->sign);
-
-  TEST_ASSERT_EQUAL_INT(0, _check_is_correct_cstr(bigint_num->cstr,
-                                                  source_cstr + 1,
-                                                  bigint_num->size));
-
-  free(source_cstr);
-  bigint_free(bigint_num);
-}
-
-void test_bigint_create_from_cstr_neg_size_2Gb() {
-
-  char *source_cstr = _create_and_fill_long_cstr(2e9, '1', '-');
-
-  TEST_ASSERT_NOT_NULL(source_cstr);
-
-  source_cstr[4] = '9';
-
-  BigInt *bigint_num = bigint_create_from_cstr(source_cstr);
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  TEST_ASSERT_EQUAL_size_t(2e9, bigint_num->size);
-  TEST_ASSERT_EQUAL_size_t(bigint_num->size + bigint_num->size / 20,
-                           bigint_num->capacity);
-  TEST_ASSERT_EQUAL_CHAR('-', bigint_num->sign);
-
-  TEST_ASSERT_EQUAL_INT(0, _check_is_correct_cstr(bigint_num->cstr,
-                                                  source_cstr + 1,
-                                                  bigint_num->size));
-
-  free(source_cstr);
-  bigint_free(bigint_num);
-}
-
-void test_bigint_create_from_cstr_NULL() {
-
-  BigInt *bigint_num = bigint_create_from_cstr(NULL);
-
-  TEST_ASSERT_NULL(bigint_num);
-}
-
-void test_bigint_create_from_copy_empty() {
-
-  BigInt *bigint_num = bigint_create();
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  BigInt *bigint_copy = bigint_create_copy(bigint_num);
-
-  TEST_ASSERT_NOT_NULL(bigint_copy);
-
-  TEST_ASSERT_EQUAL_size_t(0, bigint_copy->size);
-  TEST_ASSERT_EQUAL_size_t(BIGINT_START_CAPACITY, bigint_copy->capacity);
-  TEST_ASSERT_EQUAL_CHAR('+', bigint_copy->sign);
-  TEST_ASSERT_NULL(bigint_copy->cstr);
-
-  bigint_free(bigint_num);
-  bigint_free(bigint_copy);
-}
-
-void test_bigint_create_from_copy_zero() {
-
-  BigInt *bigint_num = bigint_create_from_num(0);
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  BigInt *bigint_copy = bigint_create_copy(bigint_num);
-
-  TEST_ASSERT_NOT_NULL(bigint_copy);
-
-  TEST_ASSERT_EQUAL_size_t(1, bigint_copy->size);
-  TEST_ASSERT_EQUAL_size_t(BIGINT_START_CAPACITY, bigint_copy->capacity);
-  TEST_ASSERT_EQUAL_CHAR('+', bigint_copy->sign);
-  TEST_ASSERT_EQUAL_CHAR('0', bigint_num->cstr[0]);
-
-  bigint_free(bigint_num);
-  bigint_free(bigint_copy);
-}
-
-void test_bigint_create_from_copy_num_pos_less_1000() {
-
-  BigInt *bigint_num = bigint_create_from_num(987);
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  BigInt *bigint_copy = bigint_create_copy(bigint_num);
-
-  TEST_ASSERT_NOT_NULL(bigint_copy);
-
-  TEST_ASSERT_EQUAL_size_t(3, bigint_copy->size);
-  TEST_ASSERT_EQUAL_size_t(BIGINT_START_CAPACITY, bigint_copy->capacity);
-  TEST_ASSERT_EQUAL_CHAR('+', bigint_copy->sign);
-
-  TEST_ASSERT_EQUAL_INT(
-      0, _check_is_correct_cstr(bigint_num->cstr, "987", bigint_num->size));
-
-  bigint_free(bigint_num);
-  bigint_free(bigint_copy);
-}
-
-void test_bigint_create_from_copy_num_neg_less_1000() {
-
-  BigInt *bigint_num = bigint_create_from_num(-987);
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  BigInt *bigint_copy = bigint_create_copy(bigint_num);
-
-  TEST_ASSERT_NOT_NULL(bigint_copy);
-
-  TEST_ASSERT_EQUAL_size_t(3, bigint_copy->size);
-  TEST_ASSERT_EQUAL_size_t(BIGINT_START_CAPACITY, bigint_copy->capacity);
-  TEST_ASSERT_EQUAL_CHAR('-', bigint_copy->sign);
-
-  TEST_ASSERT_EQUAL_INT(
-      0, _check_is_correct_cstr(bigint_num->cstr, "987", bigint_num->size));
-
-  bigint_free(bigint_num);
-  bigint_free(bigint_copy);
-}
-
-void test_bigint_create_from_copy_num_pos_10Mb() {
-
-  BigInt *bigint_num = bigint_create_from_cstr("10000000");
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  BigInt *bigint_copy = bigint_create_copy(bigint_num);
-
-  TEST_ASSERT_NOT_NULL(bigint_copy);
-
-  TEST_ASSERT_EQUAL_size_t(8, bigint_copy->size);
-  TEST_ASSERT_EQUAL_size_t(bigint_copy->size * 2, bigint_copy->capacity);
-  TEST_ASSERT_EQUAL_CHAR('+', bigint_copy->sign);
-
-  TEST_ASSERT_EQUAL_INT(0, _check_is_correct_cstr(bigint_num->cstr, "10000000",
-                                                  bigint_num->size));
-
-  bigint_free(bigint_num);
-  bigint_free(bigint_copy);
-}
-
-void test_bigint_create_from_copy_num_neg_10Mb() {
-
-  BigInt *bigint_num = bigint_create_from_cstr("-10000000");
-
-  TEST_ASSERT_NOT_NULL(bigint_num);
-
-  BigInt *bigint_copy = bigint_create_copy(bigint_num);
-
-  TEST_ASSERT_NOT_NULL(bigint_copy);
-
-  TEST_ASSERT_EQUAL_size_t(8, bigint_copy->size);
-  TEST_ASSERT_EQUAL_size_t(bigint_copy->size * 2, bigint_copy->capacity);
-  TEST_ASSERT_EQUAL_CHAR('-', bigint_copy->sign);
-
-  TEST_ASSERT_EQUAL_INT(0, _check_is_correct_cstr(bigint_num->cstr, "10000000",
-                                                  bigint_num->size));
-
-  bigint_free(bigint_num);
-  bigint_free(bigint_copy);
-}
-
-void test_bigint_create_from_copy_NULL() {
-
-  BigInt *bigint_num = bigint_create_copy(NULL);
-
-  TEST_ASSERT_NULL(bigint_num);
+typedef struct TestAdd {
+
+  const char *bigint_num;
+  const char *addend;
+  const char *result;
+  char res_sign;
+  size_t res_size;
+  size_t res_capacity;
+} TestAdd;
+
+// case -1 1
+// case 99 -99999 
+
+TestAdd add_cases[] = {
+    {"0", "0", "0", '+', 1, 4},          {"1", "1", "2", '+', 1, 4},
+    {"-1", "1", "0", '-', 1, 4},         {"5", "7", "12", '+', 2, 4},
+    {"5", "-7", "2", '-', 1, 4},         {"23", "34", "57", '+', 2, 4},
+    {"34", "-23", "11", '+', 2, 4},      {"50", "50", "100", '+', 3, 4},
+    {"9999", "99", "10098", '+', 5, 8},  //{"99", "-99999", "99900", '-', 5, 10},
+    {"999999", "1", "1000000", '+', 7,12},
+};
+
+void tests_add() {
+  size_t num_of_tests = sizeof(add_cases) / sizeof(add_cases[0]);
+  for (size_t i = 0; i < num_of_tests; ++i) {
+
+    char message[256];
+    sprintf(message, "Case %zu: Bigint num %s, addend %s", i,
+            add_cases[i].bigint_num, add_cases[i].addend);
+
+    BigInt *bigint_num = bigint_create_from_cstr(add_cases[i].bigint_num);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(bigint_num, message);
+
+    BigInt *addend = bigint_create_from_cstr(add_cases[i].addend);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(addend, message);
+
+    bigint_add(bigint_num, addend);
+
+    TEST_ASSERT_EQUAL_size_t_MESSAGE(add_cases[i].res_size, bigint_num->size,
+                                     message);
+    TEST_ASSERT_EQUAL_size_t_MESSAGE(add_cases[i].res_capacity,
+                                     bigint_num->capacity, message);
+    TEST_ASSERT_EQUAL_CHAR_MESSAGE(add_cases[i].res_sign, bigint_num->sign,
+                                   message);
+
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0,
+                                  _check_is_correct_buffer(bigint_num->buffer,
+                                                           add_cases[i].result,
+                                                           bigint_num->size),
+                                  message);
+
+    bigint_free(bigint_num);
+    bigint_free(addend);
+  }
 }
 
 int main() {
@@ -645,52 +461,16 @@ int main() {
 
   printf("\n");
 
-  RUN_TEST(test_bigint_create);
-
-  printf("\n");
-
-  RUN_TEST(test_bigint_create_from_num_zero);
-  RUN_TEST(test_bigint_create_from_num_pos_less_100);
-  RUN_TEST(test_bigint_create_from_num_pos_less_10000);
-  RUN_TEST(test_bigint_create_from_num_pos_less_1e12);
-  RUN_TEST(test_bigint_create_from_num_neg_less_100);
-  RUN_TEST(test_bigint_create_from_num_neg_less_10000);
-  RUN_TEST(test_bigint_create_from_num_neg_less_1e12);
-
-  printf("\n");
-
-  RUN_TEST(test_bigint_create_from_cstr_pos_zero);
-  RUN_TEST(test_bigint_create_from_cstr_neg_zero);
-
-  printf("\n");
-
-  RUN_TEST(test_bigint_create_from_cstr_pos_size_2b);
-  RUN_TEST(test_bigint_create_from_cstr_pos_size_6b);
-  RUN_TEST(test_bigint_create_from_cstr_pos_size_64b);
-  RUN_TEST(test_bigint_create_from_cstr_pos_size_100kb);
-  // RUN_TEST(test_bigint_create_from_cstr_pos_size_100Mb);
-  // RUN_TEST(test_bigint_create_from_cstr_pos_size_2Gb);
-
-  printf("\n");
-
-  RUN_TEST(test_bigint_create_from_cstr_neg_size_2b);
-  RUN_TEST(test_bigint_create_from_cstr_neg_size_6b);
-  RUN_TEST(test_bigint_create_from_cstr_neg_size_64b);
-  RUN_TEST(test_bigint_create_from_cstr_neg_size_100kb);
-  // RUN_TEST(test_bigint_create_from_cstr_neg_size_100Mb);
-  // RUN_TEST(test_bigint_create_from_cstr_neg_size_2Gb);
-
-  RUN_TEST(test_bigint_create_from_cstr_NULL);
-
-  printf("\n");
-
-  RUN_TEST(test_bigint_create_from_copy_NULL);
-  RUN_TEST(test_bigint_create_from_copy_empty);
-  RUN_TEST(test_bigint_create_from_copy_zero);
-  RUN_TEST(test_bigint_create_from_copy_num_pos_less_1000);
-  RUN_TEST(test_bigint_create_from_copy_num_neg_less_1000);
-  RUN_TEST(test_bigint_create_from_copy_num_pos_10Mb);
-  RUN_TEST(test_bigint_create_from_copy_num_neg_10Mb);
+  RUN_TEST(test_create);
+  RUN_TEST(tests_create_from_num);
+  RUN_TEST(tests_create_from_cstr);
+  RUN_TEST(tests_create_copy);
+  RUN_TEST(tests_less);
+  RUN_TEST(tests_greater);
+  RUN_TEST(tests_is_equal);
+  RUN_TEST(tests_less_or_equal);
+  RUN_TEST(tests_greater_or_equal);
+  RUN_TEST(tests_add);
 
   return UNITY_END();
 }
