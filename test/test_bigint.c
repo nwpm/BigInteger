@@ -407,16 +407,18 @@ typedef struct TestAdd {
   size_t res_capacity;
 } TestAdd;
 
-// case -1 1
-// case 99 -99999 
-
 TestAdd add_cases[] = {
-    {"0", "0", "0", '+', 1, 4},          {"1", "1", "2", '+', 1, 4},
-    {"-1", "1", "0", '-', 1, 4},         {"5", "7", "12", '+', 2, 4},
-    {"5", "-7", "2", '-', 1, 4},         {"23", "34", "57", '+', 2, 4},
-    {"34", "-23", "11", '+', 2, 4},      {"50", "50", "100", '+', 3, 4},
-    {"9999", "99", "10098", '+', 5, 8},  //{"99", "-99999", "99900", '-', 5, 10},
-    {"999999", "1", "1000000", '+', 7,12},
+    {"0", "0", "0", '+', 1, 4},
+    {"1", "1", "2", '+', 1, 4},
+    {"-1", "1", "0", '+', 1, 4},
+    {"5", "7", "12", '+', 2, 4},
+    {"5", "-7", "2", '-', 1, 4},
+    {"23", "34", "57", '+', 2, 4},
+    {"34", "-23", "11", '+', 2, 4},
+    {"50", "50", "100", '+', 3, 4},
+    {"9999", "99", "10098", '+', 5, 8},
+    {"99", "-99999", "99900", '-', 5, 10},
+    {"999999", "1", "1000000", '+', 7, 12},
 };
 
 void tests_add() {
@@ -455,6 +457,127 @@ void tests_add() {
   }
 }
 
+typedef struct TestSubstract {
+
+  const char *bigint_num;
+  const char *substr;
+  const char *result;
+  char res_sign;
+  size_t res_size;
+  size_t res_capacity;
+} TestSubstract;
+
+TestSubstract substract_cases[] = {
+    {"0", "0", "0", '+', 1, 4},
+    {"1", "1", "0", '+', 1, 4},
+    {"-1", "1", "2", '-', 1, 4},
+    {"5", "7", "2", '-', 1, 4},
+    {"5", "-7", "12", '+', 2, 4},
+    {"23", "34", "11", '-', 2, 4},
+    {"34", "-23", "57", '+', 2, 4},
+    {"50", "50", "0", '+', 1, 4},
+    {"9999", "99", "9900", '+', 4, 8},
+    {"99", "-99999", "100098", '+', 6, 12},
+    {"999999", "1", "999998", '+', 6, 12},
+};
+
+void tests_substract() {
+  size_t num_of_tests = sizeof(substract_cases) / sizeof(substract_cases[0]);
+  for (size_t i = 0; i < num_of_tests; ++i) {
+
+    char message[256];
+    sprintf(message, "Case %zu: Bigint num %s, substr %s", i,
+            substract_cases[i].bigint_num, substract_cases[i].substr);
+
+    BigInt *bigint_num = bigint_create_from_cstr(substract_cases[i].bigint_num);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(bigint_num, message);
+
+    BigInt *substr = bigint_create_from_cstr(substract_cases[i].substr);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(substr, message);
+
+    bigint_subtract(bigint_num, substr);
+
+    TEST_ASSERT_EQUAL_size_t_MESSAGE(substract_cases[i].res_size, bigint_num->size,
+                                     message);
+    TEST_ASSERT_EQUAL_size_t_MESSAGE(substract_cases[i].res_capacity,
+                                     bigint_num->capacity, message);
+    TEST_ASSERT_EQUAL_CHAR_MESSAGE(substract_cases[i].res_sign, bigint_num->sign,
+                                   message);
+
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0,
+                                  _check_is_correct_buffer(bigint_num->buffer,
+                                                           substract_cases[i].result,
+                                                           bigint_num->size),
+                                  message);
+
+    bigint_free(bigint_num);
+    bigint_free(substr);
+  }
+}
+
+typedef struct TestMult {
+
+  const char *bigint_num;
+  const char *multiplyer;
+  const char *result;
+  char res_sign;
+  size_t res_size;
+  size_t res_capacity;
+} TestMult;
+
+TestMult mult_cases[] = {
+    {"0", "0", "0", '+', 1, 4},
+    {"1", "1", "1", '+', 1, 4},
+    {"-1", "1", "1", '-', 1, 4},
+    {"5", "7", "35", '+', 2, 4},
+    {"5", "-7", "35", '-', 2, 4},
+    {"23", "34", "782", '+', 3, 8},
+    {"34", "-23", "782", '-', 3, 8},
+    {"50", "50", "2500", '+', 4, 10},
+    {"9999", "99", "989901", '+', 6, 12},
+    {"99", "-99999", "9899901", '-', 7, 14},
+    {"999999", "1", "999999", '+', 6, 14},
+};
+
+void tests_mult() {
+  size_t num_of_tests = sizeof(mult_cases) / sizeof(mult_cases[0]);
+  for (size_t i = 0; i < num_of_tests; ++i) {
+
+    char message[256];
+    sprintf(message, "Case %zu: Bigint num %s, multiplyer %s", i,
+            mult_cases[i].bigint_num, mult_cases[i].multiplyer);
+
+    BigInt *bigint_num = bigint_create_from_cstr(mult_cases[i].bigint_num);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(bigint_num, message);
+
+    BigInt *multiplyer = bigint_create_from_cstr(mult_cases[i].multiplyer);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(multiplyer, message);
+
+    bigint_multiply(bigint_num, multiplyer);
+
+    TEST_ASSERT_EQUAL_size_t_MESSAGE(mult_cases[i].res_size, bigint_num->size,
+                                     message);
+    TEST_ASSERT_EQUAL_size_t_MESSAGE(mult_cases[i].res_capacity,
+                                     bigint_num->capacity, message);
+    TEST_ASSERT_EQUAL_CHAR_MESSAGE(mult_cases[i].res_sign, bigint_num->sign,
+                                   message);
+
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0,
+                                  _check_is_correct_buffer(bigint_num->buffer,
+                                                           mult_cases[i].result,
+                                                           bigint_num->size),
+                                  message);
+
+    bigint_free(bigint_num);
+    bigint_free(multiplyer);
+  }
+}
+
+
 int main() {
 
   UNITY_BEGIN();
@@ -471,6 +594,8 @@ int main() {
   RUN_TEST(tests_less_or_equal);
   RUN_TEST(tests_greater_or_equal);
   RUN_TEST(tests_add);
+  RUN_TEST(tests_substract);
+  RUN_TEST(tests_mult);
 
   return UNITY_END();
 }
