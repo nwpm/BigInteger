@@ -126,6 +126,32 @@ static int _abs_compare(const BigInt *lhs, const BigInt *rhs) {
   return 0;
 }
 
+static char _calculate_res_sign(const BigInt *lhs, const BigInt *rhs,
+                                char operation) {
+
+  int compare_res = _abs_compare(lhs, rhs);
+
+  if (operation == '+') {
+    if (compare_res == 0) {
+      return (lhs->sign == '-' && rhs->sign == '-') ? '-' : '+';
+    } else if (compare_res == 1) {
+      return (lhs->sign == '-') ? '-' : '+';
+    } else if (compare_res == -1) {
+      return (rhs->sign == '+') ? '+' : '-';
+    }
+  }
+
+  if (compare_res == 0) {
+    return (lhs->sign == '-' && rhs->sign == '+') ? '-' : '+';
+  } else if (compare_res == 1) {
+    return (lhs->sign == '-') ? '-' : '+';
+  } else if (compare_res == -1) {
+    return (rhs->sign == '+') ? '-' : '+';
+  }
+
+  return '#';
+}
+
 static int _calculate_abs_sum(BigInt *bigint_num, const BigInt *addend,
                               char res_sign) {
 
@@ -191,12 +217,24 @@ static int _calculate_abs_sum(BigInt *bigint_num, const BigInt *addend,
   return 0;
 }
 
-static int _calculate_abs_dif(BigInt *bigint_num, const BigInt *substr) {
+static int _calculate_abs_dif(BigInt *bigint_num, const BigInt *substr, char res_sign) {
 
   int compare_res = _abs_compare(bigint_num, substr);
 
   const BigInt *smaller_abs_num = (compare_res >= 0) ? substr : bigint_num;
   const BigInt *greater_abs_num = (compare_res >= 0) ? bigint_num : substr;
+
+  if (bigint_num->capacity < greater_abs_num->size) {
+
+    bigint_num->capacity = _calculate_capacity(greater_abs_num->size);
+    void *new_buffer = realloc(bigint_num->buffer, greater_abs_num->capacity);
+
+    if (!new_buffer) {
+      return -1;
+    }
+
+    bigint_num->buffer = new_buffer;
+  }
 
   int substr_part = 0;
   size_t i = 0;
@@ -215,7 +253,7 @@ static int _calculate_abs_dif(BigInt *bigint_num, const BigInt *substr) {
     bigint_num->buffer[i++] = substr + '0';
   }
 
-  while (substr_part) {
+  while (i < greater_abs_num->size) {
     int digit_greater = greater_abs_num->buffer[i] - '0';
     int substr = digit_greater - substr_part;
 
@@ -235,22 +273,17 @@ static int _calculate_abs_dif(BigInt *bigint_num, const BigInt *substr) {
     bigint_num->size--;
   }
 
-  bigint_num->sign = greater_abs_num->sign;
+  bigint_num->sign = res_sign;
 
   return 0;
 }
 
-static void _resize(BigInt *bigint_num, size_t new_capacity) {
-  void *new_buffer = realloc(bigint_num->buffer, new_capacity);
-  bigint_num->buffer = new_buffer;
-}
+static int _calculate_abs_mult(BigInt *bigint_num, const BigInt *multiplyer) {
 
-static int _calculate_abs_mult(BigInt **bigint_num, const BigInt *multiplyer) {
+  int compare_res = _abs_compare(bigint_num, multiplyer);
 
-  int compare_res = _abs_compare(*bigint_num, multiplyer);
-
-  const BigInt *smaller_abs_num = (compare_res >= 0) ? multiplyer : *bigint_num;
-  const BigInt *greater_abs_num = (compare_res >= 0) ? *bigint_num : multiplyer;
+  const BigInt *smaller_abs_num = (compare_res >= 0) ? multiplyer : bigint_num;
+  const BigInt *greater_abs_num = (compare_res >= 0) ? bigint_num : multiplyer;
 
   size_t max_size = greater_abs_num->size + smaller_abs_num->size;
 
@@ -261,17 +294,27 @@ static int _calculate_abs_mult(BigInt **bigint_num, const BigInt *multiplyer) {
 
   BigInt *temp = bigint_create_from_num(0);
 
-  if (!temp)
+  if(!temp)
     return -1;
 
-  _resize(temp, max_size);
+  if (temp->capacity < max_size) {
+    temp->capacity = _calculate_capacity(max_size);
+
+    void *new_buffer = realloc(temp->buffer, temp->capacity);
+
+    if (!new_buffer) {
+      return -1;
+    }
+
+    temp->buffer = new_buffer;
+  }
 
   for (size_t i = 0; i < smaller_abs_num->size; ++i) {
     int digit_smaller = smaller_abs_num->buffer[i] - '0';
     int mult_part = 0;
     size_t k = 0;
 
-    for(; k < i; ++k){
+    for (; k < i; ++k) {
       temp->buffer[k] = 0 + '0';
     }
 
@@ -292,21 +335,21 @@ static int _calculate_abs_mult(BigInt **bigint_num, const BigInt *multiplyer) {
       temp->buffer[k++] = mult_part + '0';
     }
 
+    temp->size = k;
+
     bigint_add(res_of_mult, temp);
   }
 
-  res_of_mult->sign = ((*bigint_num)->sign == multiplyer->sign) ? '+' : '-';
+  res_of_mult->sign = (bigint_num->sign == multiplyer->sign) ? '+' : '-';
 
-  BigInt *t_ptr = *bigint_num;
-  *bigint_num = res_of_mult;
-  bigint_free(t_ptr);
+  free(bigint_num->buffer);
+  bigint_num->buffer = res_of_mult->buffer;
+  bigint_num->size = res_of_mult->size;
+  bigint_num->sign = res_of_mult->sign;
+  bigint_num->capacity = res_of_mult->capacity;
+  free(res_of_mult);
+
   bigint_free(temp);
-
-  return 0;
-}
-
-static int _calculate_quotient(BigInt *bigint_num, const BigInt *divider){
-
 
   return 0;
 }
@@ -478,30 +521,32 @@ BigInt *bigint_add(BigInt *bigint_num, const BigInt *addend) {
     return NULL;
 
   int add_status = 0;
+  char res_sign = _calculate_res_sign(bigint_num, addend, '+');
 
   if (bigint_num->sign == addend->sign) {
     add_status = _calculate_abs_sum(bigint_num, addend, bigint_num->sign);
   } else {
-    add_status = _calculate_abs_dif(bigint_num, addend);
+    add_status = _calculate_abs_dif(bigint_num, addend, res_sign);
   }
 
   return (add_status == 0) ? bigint_num : NULL;
 }
 
-BigInt *bigint_substract(BigInt *bigint_num, const BigInt *substr) {
+BigInt *bigint_subtract(BigInt *bigint_num, const BigInt *substr) {
 
   if (!bigint_num || !substr)
     return NULL;
 
-  if (bigint_num->sign == substr->sign) {
-    _calculate_abs_dif(bigint_num, substr);
-  } else if (bigint_num->sign == '+' && substr->sign == '-') {
-    _calculate_abs_sum(bigint_num, substr, '+');
-  } else if (bigint_num->sign == '-' && substr->sign == '+') {
-    _calculate_abs_sum(bigint_num, substr, '-');
-  }
+  int substr_status = 0;
+  char res_sign = _calculate_res_sign(bigint_num, substr, '-');
 
-  return bigint_num;
+  if (bigint_num->sign == substr->sign) {
+    substr_status = _calculate_abs_dif(bigint_num, substr, res_sign);
+  } else {
+    substr_status = _calculate_abs_sum(bigint_num, substr, res_sign);
+  } 
+
+  return (substr_status == 0) ? bigint_num: NULL;
 }
 
 BigInt *bigint_multiply(BigInt *bigint_num, const BigInt *multiplier) {
@@ -509,14 +554,14 @@ BigInt *bigint_multiply(BigInt *bigint_num, const BigInt *multiplier) {
   if (!bigint_num || !multiplier)
     return NULL;
 
-  int res_multiply = _calculate_abs_mult(&bigint_num, multiplier);
+  int res_multiply = _calculate_abs_mult(bigint_num, multiplier);
 
   return (res_multiply == 0) ? bigint_num : NULL;
 }
 
-BigInt *bigint_divide(BigInt *bigint_num, const BigInt* divider){
+BigInt *bigint_divide(BigInt *bigint_num, const BigInt *divider) {
 
-  if(!bigint_num || !divider)
+  if (!bigint_num || !divider)
     return NULL;
 
   return 0;
