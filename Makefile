@@ -66,11 +66,11 @@ release:
 install: $(LIB_TARGET)
 	install -d /usr/local/lib/ /usr/local/include/
 	cp $(LIB_TARGET) /usr/local/lib/
-	cp $(INCLUDE_DIR)/big_int.h /usr/local/include/
+	cp src/bigint.h /usr/local/include/
 
 uninstall:
 	rm -f /usr/local/lib/lib$(PROJECT_NAME).a
-	rm -f /usr/local/include/big_int.h
+	rm -f /usr/local/include/bigint.h
 
 cllib:
 	rm -rf $(BUILD_DIR)/*
